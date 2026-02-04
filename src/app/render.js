@@ -272,24 +272,24 @@ function renderCompare(state) {
   if (!session) {
     const canStart = state.finishedIds.length >= 2;
     return `
-      <div class="card">
+      <div class="card signalContainer" data-kind="miccheck-landing">
         <h2>Mic check</h2>
         <div class="muted">${canStart ? "Ten quick picks. Your shelf will snap into place." : "Add at least 2 finished books to begin."}</div>
         <div style="height:12px;"></div>
-        <button class="btn primary" data-action="start:miccheck" ${canStart ? "" : "disabled"}>Start mic check</button>
+        <button class="btn primary signalCTA" data-action="start:miccheck" ${canStart ? "" : "disabled"}>Start mic check</button>
       </div>
     `;
   }
 
   if (stepsLeft === 0) {
     return `
-      <div class="card">
+      <div class="card signalContainer" data-kind="signal-found">
         <div class="kicker">Mic check</div>
         <h2>Signal found.</h2>
         <div class="muted">Your rankings are forming. Want to tighten the middle?</div>
         <div style="height:12px;"></div>
         <div class="btns">
-          <button class="btn primary" data-action="start:more" data-steps="5">Do 5 more</button>
+          <button class="btn primary signalCTA" data-action="start:more" data-steps="5">Do 5 more</button>
           <button class="btn" data-action="nav:library">Back to library</button>
         </div>
       </div>
