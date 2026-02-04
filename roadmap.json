@@ -2,7 +2,7 @@
   "project_name": "checkcheck",
   "tagline": "Mic-check your taste: comparisons-first personal ratings for books (Phase 1), expandable to films + restaurants (Phase 2+).",
   "version": "1.0.0-phase1-spec",
-  "last_updated": "2026-02-03",
+  "last_updated": "2026-02-04",
   "brand": {
     "working_name": "checkcheck",
     "pronunciation": "check-check",
@@ -67,6 +67,7 @@
             "Manual add (title, author) as baseline.",
             "Optional: external search integration (later) behind a flag.",
             "Statuses: want / reading / finished; finished_at.",
+            "Library sub-views: Want to read (saved queue) vs Finished (rated history).",
             "De-dupe strategy documented (work vs edition)."
           ],
           "acceptance_criteria": [
@@ -80,6 +81,7 @@
           "outcome": "User can complete a 10-comparison sprint with near-zero friction.",
           "scope": [
             "Compare surface (A vs B) with primary actions: A wins / B wins / Skip / Undo.",
+            "Gate compare until 5 active finished items exist (initiation milestone).",
             "Persist comparison rows (user_id, a, b, winner|null, created_at).",
             "Pair selection: meaningful matchups (see docs/PAIR_SELECTION.md)."
           ],
@@ -97,6 +99,7 @@
             "Compute per-item strength (Elo) deterministically from comparisons.",
             "Convert strength→percentile→rank_score_raw via versioned curve.",
             "Compute quarter-star candidate and apply hysteresis to stars_display.",
+            "Stars display should be visually unambiguous (SVG quarter-fill).",
             "Stacked rating UI: quarter stars + rank_score_raw + rank/percentile + confidence (comparison count)."
           ],
           "acceptance_criteria": [

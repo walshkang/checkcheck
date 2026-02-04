@@ -32,6 +32,10 @@ Avoid:
 - **Mic check**
 - **Profile** (later; Phase 1 can omit)
 
+### Library sub-views
+- **Want to read**
+- **Finished**
+
 ### Compare screen
 - Buttons:
   - **A wins**
@@ -45,7 +49,7 @@ Avoid:
 
 ### Library list rows
 - Show:
-  - Quarter stars (e.g., ★★★★¼)
+  - Quarter-star icons (0.25 steps)
   - Title / Author
   - Optional tiny chips: “Top 12%” or “Rank #7”
 - Avoid showing 2-decimal rank score in list views.
@@ -53,7 +57,7 @@ Avoid:
 ### Item detail
 - Title
 - Stars + rank score:
-  - “★★★★¾”
+  - Quarter-star icons
   - “4.83 / 5.00”
   - “Rank #7 of 120 • Top 6%”
   - “Based on 14 comparisons”

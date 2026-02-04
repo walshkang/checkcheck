@@ -1,6 +1,6 @@
 # CONTEXT.md — checkcheck
 
-Last updated: 2026-02-03
+Last updated: 2026-02-04
 
 ## Active Phase
 **Phase 1 — checkcheck MVP (Books Only)**
@@ -23,10 +23,16 @@ Goal: validate that reviewing against yourself via fast A/B comparisons is delig
 
 Mobile rule: **only one primary surface at a time** (Compare > Detail > Library).
 
+## Current Shape (shipped)
+- Library has two sub-views: **Want to read** (saved queue) and **Finished** (rated history).
+- Compare is gated until **5 active finished** items exist.
+- Initial mic check hides stars during comparisons; stars render after initiation.
+- Stars display uses quarter steps (0.25) and is rendered via SVG for clarity.
+
 ## Immediate Work (next 1–2 slices)
-1. Library scaffolding + manual add + statuses (want/reading/finished).
-2. Compare session surface with persistence + Undo.
-3. Scoring pipeline + stacked rating UI.
+1. Detail trust tools polish: “Place this book” loop, explanation clarity, and fewer sharp edges.
+2. Want-to-read enrichment: sources/notes + add-from-search flow tuned for saving.
+3. Instrumentation: track initiation rate at 5 finished, mic-check completion time, and after-finish usage.
 
 ## Open Questions (intentionally deferred unless blocking)
 - Work vs edition identity: do we de-dupe by title+author only (MVP), or support editions later?
