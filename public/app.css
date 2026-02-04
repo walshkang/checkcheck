@@ -275,6 +275,7 @@ input {
 
 .stars {
   --stars-size: 13px;
+  --stars-fill: 0%;
   position: relative;
   display: inline-block;
   font-family: var(--mono);
@@ -286,17 +287,20 @@ input {
   height: 1em;
 }
 
-.starsBg {
-  display: block;
+.stars::before {
+  content: "★★★★★";
+  display: inline-block;
   color: rgba(0, 0, 0, 0.22);
 }
 
-.starsFg {
+.stars::after {
+  content: "★★★★★";
   position: absolute;
   left: 0;
   top: 0;
+  width: var(--stars-fill);
   overflow: hidden;
-  display: block;
+  display: inline-block;
   white-space: nowrap;
   color: var(--ink);
 }

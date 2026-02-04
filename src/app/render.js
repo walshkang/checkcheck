@@ -15,12 +15,11 @@ function renderStars(starsDisplay, { sizePx = null, step = 0.25 } = {}) {
   const q = Math.max(0, Math.min(5, Math.round(clamped / step) * step));
   const pct = (q / 5) * 100;
   const label = `${q % 1 === 0 ? String(q) : q.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")} out of 5 stars`;
-  const size = sizePx != null ? ` style="--stars-size:${Number(sizePx)}px;"` : "";
+  const size = sizePx != null ? `--stars-size:${Number(sizePx)}px;` : "";
+  const fill = `--stars-fill:${pct.toFixed(2)}%;`;
+  const style = ` style="${escapeHtml(`${size}${fill}`)}"`;
   return `
-    <span class="stars" role="img" aria-label="${escapeHtml(label)}"${size}>
-      <span class="starsBg" aria-hidden="true">★★★★★</span>
-      <span class="starsFg" aria-hidden="true" style="width:${pct.toFixed(2)}%;">★★★★★</span>
-    </span>
+    <span class="stars" role="img" aria-label="${escapeHtml(label)}"${style}></span>
   `;
 }
 
