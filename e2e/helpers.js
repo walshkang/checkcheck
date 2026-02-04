@@ -36,17 +36,19 @@ export function getRowByTitle(page, title) {
 export async function setRowFinished(page, title, finished) {
   const row = getRowByTitle(page, title);
   await expect(row).toBeVisible();
-  const chip = row.locator('button.chip[data-action="quick:status"]');
-  await expect(chip).toBeVisible();
-  const label = (await chip.textContent())?.trim();
-  const isFinished = label === "Finished";
-  if (finished === isFinished) return;
+  // Status changes happen via Detail (Finished view disables quick toggles by design).
+  await row.click();
+  const btn = page.locator(`[data-action="status:set"][data-status="${finished ? "finished" : "want"}"]`);
+  await expect(btn).toBeVisible();
 
   const footer = page.locator(".footer").first();
   const beforeText = (await footer.textContent()) ?? "";
   const beforeMatch = beforeText.match(/Finished:\s*(\d+)/);
   const before = beforeMatch ? Number(beforeMatch[1]) : null;
-  await chip.click();
+
+  await btn.click();
+  await page.locator('button.btn[data-action="nav:library"]').click();
+
   if (before != null) {
     const delta = finished ? 1 : -1;
     await expect.poll(async () => {

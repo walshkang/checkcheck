@@ -733,14 +733,6 @@ export async function startApp() {
       return;
     }
 
-    if (action === "quick:status") {
-      const itemId = el.getAttribute("data-item-id");
-      const nextStatus = el.getAttribute("data-next-status");
-      if (!itemId) return;
-      if (nextStatus !== "want" && nextStatus !== "reading" && nextStatus !== "finished") return;
-      return void handleSetStatus(itemId, nextStatus).catch((e) => alert(String(e)));
-    }
-
     if (action === "search:add") {
       const idx = Number(el.getAttribute("data-result-idx") || "-1");
       if (!Number.isFinite(idx) || idx < 0) return;

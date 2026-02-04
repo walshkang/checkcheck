@@ -55,27 +55,6 @@ function itemLine(item) {
   return author ? `${title} <span class="muted">·</span> <span class="muted">${author}</span>` : title;
 }
 
-function statusChip(status) {
-  if (status === "finished") return `<span class="chip">Finished</span>`;
-  if (status === "reading") return `<span class="chip">Reading</span>`;
-  return `<span class="chip">Want</span>`;
-}
-
-function statusChipButton(itemId, status) {
-  const next = status === "finished" ? "want" : "finished";
-  const label = status === "finished" ? "Finished" : status === "reading" ? "Reading" : "Want";
-  return `
-    <button
-      class="chip"
-      data-action="quick:status"
-      data-item-id="${escapeHtml(itemId)}"
-      data-next-status="${escapeHtml(next)}"
-      aria-label="Set status"
-      type="button"
-    >${label}</button>
-  `;
-}
-
 export function renderApp(state) {
   const { surface } = state;
   const navLibraryCurrent = surface === "library" ? ' aria-current="page"' : "";
@@ -160,6 +139,10 @@ function renderLibrary(state) {
 	      const isFinishedActive = entry.status === "finished" && !isArchived;
 	      const isRated = !!derived && derived.stars_display != null;
 	      const stars = isRated ? renderStars(derived.stars_display) : "";
+	      const ratingSlot =
+	        state.libraryView === "finished" && isFinishedActive && !isRated
+	          ? `<span class="chip">Not rated</span>`
+	          : stars || "";
 	      const showTypeChip =
 	        !isArchived &&
 	        state.libraryView === "want" &&
@@ -198,21 +181,14 @@ function renderLibrary(state) {
 		              <div class="title">${itemLine(item)}</div>
 		              <div class="sub">${escapeHtml(sub)}</div>
 		            </div>
-		            <div class="stack" style="align-items:flex-end; gap:8px;">
-		              ${stars || ""}
-		              ${typeChip}
-		              ${
-		                isArchived
-		                  ? `<span class="chip">Archived</span>${statusChip(entry.status)}`
-		                  : state.libraryView === "finished" && entry.status === "finished"
-	                    ? `${statusChip(entry.status)}`
-	                    : `${statusChipButton(item.id, entry.status)}`
-	              }
-	              ${isFinishedActive && !isRated ? `<span class="chip">Not rated</span>` : ""}
+			            <div class="stack" style="align-items:flex-end; gap:8px;">
+			              ${ratingSlot}
+			              ${typeChip}
+			              ${isArchived ? `<span class="chip">Archived</span>` : ""}
 	            </div>
 	          </div>
-	          ${finishPrompt}
-	        </li>
+		          ${finishPrompt}
+		        </li>
       `;
     })
     .join("");
@@ -537,10 +513,13 @@ function renderDetail(state) {
       <div style="height:12px;"></div>
       <div class="row" style="flex-wrap:wrap;">
         ${isArchived ? `<span class="chip">Archived</span>` : ""}
-        ${statusChip(entry.status)}
         <div class="row" style="gap:8px;">
-          <button class="btn" data-action="status:set" data-status="want" ${isArchived ? "disabled" : ""}>Want</button>
-          <button class="btn" data-action="status:set" data-status="finished" ${isArchived ? "disabled" : ""}>Finished</button>
+          <button class="btn" data-action="status:set" data-status="want" ${
+            isArchived || entry.status === "want" ? "disabled" : ""
+          }>Want</button>
+          <button class="btn" data-action="status:set" data-status="finished" ${
+            isArchived || entry.status === "finished" ? "disabled" : ""
+          }>Finished</button>
         </div>
       </div>
       <div style="height:12px;"></div>
