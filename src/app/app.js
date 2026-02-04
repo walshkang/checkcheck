@@ -251,6 +251,94 @@ export async function startApp() {
     render();
   }
 
+  function normalizeTag(tag) {
+    const v = String(tag || "").trim().replace(/\s+/g, " ");
+    if (!v) return null;
+    return v.length > 40 ? v.slice(0, 40) : v;
+  }
+
+  function dedupeTags(tags) {
+    const out = [];
+    const seen = new Set();
+    for (const t of Array.isArray(tags) ? tags : []) {
+      const v = normalizeTag(t);
+      if (!v) continue;
+      const key = v.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(v);
+      if (out.length >= 20) break;
+    }
+    return out;
+  }
+
+  async function handlePatchEntry(itemId, patch) {
+    const entry = await idb.patchLibraryEntry(itemId, patch);
+    state.libraryByItemId.set(itemId, entry);
+    const idx = state.libraryEntries.findIndex((e) => e.item_id === itemId);
+    if (idx >= 0) state.libraryEntries[idx] = entry;
+    else state.libraryEntries.push(entry);
+    await recomputeAndPersist();
+    render();
+    return entry;
+  }
+
+  async function handleTypeUseSuggested() {
+    const itemId = state.detailItemId;
+    if (!itemId) return;
+    const entry = state.libraryByItemId.get(itemId);
+    if (!entry?.type_suggested) return;
+    await handlePatchEntry(itemId, { type_confirmed: entry.type_suggested, type_decision: "confirmed" });
+  }
+
+  async function handleTypeClear() {
+    const itemId = state.detailItemId;
+    if (!itemId) return;
+    await handlePatchEntry(itemId, { type_confirmed: null, type_decision: "cleared" });
+  }
+
+  async function handleTypeSelect(value) {
+    const itemId = state.detailItemId;
+    if (!itemId) return;
+    const v = String(value || "").trim();
+    if (!v) return;
+    await handlePatchEntry(itemId, { type_confirmed: v, type_decision: "confirmed" });
+  }
+
+  async function handleTagAdd(form) {
+    const itemId = state.detailItemId;
+    if (!itemId) return;
+    const entry = state.libraryByItemId.get(itemId);
+    if (!entry || entry.archived_at) return;
+
+    const fd = new FormData(form);
+    const raw = fd.get("tag");
+    const tag = normalizeTag(raw);
+    if (!tag) return;
+
+    const next = dedupeTags([...(entry.tags ?? []), tag]);
+    if (next.length === (entry.tags ?? []).length) {
+      setToast("Tag already added.", { hint: "Tags are just for you." });
+      form.reset();
+      return;
+    }
+    await handlePatchEntry(itemId, { tags: next });
+    form.reset();
+  }
+
+  async function handleTagRemove(idx) {
+    const itemId = state.detailItemId;
+    if (!itemId) return;
+    const entry = state.libraryByItemId.get(itemId);
+    if (!entry || entry.archived_at) return;
+    const i = Number(idx);
+    if (!Number.isFinite(i) || i < 0) return;
+    const tags = Array.isArray(entry.tags) ? entry.tags : [];
+    if (i >= tags.length) return;
+    const next = tags.slice(0, i).concat(tags.slice(i + 1));
+    await handlePatchEntry(itemId, { tags: next });
+  }
+
 	  async function handleAddItem(form) {
 	    const fd = new FormData(form);
 	    const title = String(fd.get("title") || "").trim();
@@ -519,6 +607,19 @@ export async function startApp() {
       ev.preventDefault();
       handleSearchOpenLibrary(form).catch((e) => alert(String(e)));
     }
+    if (action === "tag:add") {
+      ev.preventDefault();
+      handleTagAdd(form).catch((e) => alert(String(e)));
+    }
+  });
+
+  root.addEventListener("change", (ev) => {
+    const el = ev.target;
+    if (!(el instanceof HTMLSelectElement)) return;
+    const action = el.getAttribute("data-action");
+    if (action === "type:select") {
+      handleTypeSelect(el.value).catch((e) => alert(String(e)));
+    }
   });
 
 	  root.addEventListener("click", (ev) => {
@@ -659,6 +760,17 @@ export async function startApp() {
       if (!itemId) return;
       if (status !== "want" && status !== "reading" && status !== "finished") return;
       return void handleSetStatus(itemId, status).catch((e) => alert(String(e)));
+    }
+
+    if (action === "type:useSuggested") {
+      return void handleTypeUseSuggested().catch((e) => alert(String(e)));
+    }
+    if (action === "type:clear") {
+      return void handleTypeClear().catch((e) => alert(String(e)));
+    }
+    if (action === "tag:remove") {
+      const idx = el.getAttribute("data-tag-idx");
+      return void handleTagRemove(idx).catch((e) => alert(String(e)));
     }
   });
 

@@ -76,9 +76,18 @@ function normalizeItem(it) {
 
 function normalizeLibraryEntry(e) {
   const tagsRaw = Array.isArray(e?.tags) ? e.tags : [];
-  const tags = tagsRaw
-    .map((t) => String(t || "").trim())
-    .filter(Boolean);
+  const tags = [];
+  const seen = new Set();
+  for (const t of tagsRaw) {
+    const v = String(t || "").trim().replace(/\s+/g, " ");
+    if (!v) continue;
+    const clipped = v.length > 40 ? v.slice(0, 40) : v;
+    const key = clipped.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tags.push(clipped);
+    if (tags.length >= 20) break;
+  }
 
   const typeSuggested = typeof e?.type_suggested === "string" ? e.type_suggested.trim() : "";
   const typeConfirmed = typeof e?.type_confirmed === "string" ? e.type_confirmed.trim() : "";
@@ -141,15 +150,47 @@ export async function addItem({
 export async function setLibraryStatus(itemId, status) {
   const now = new Date().toISOString();
   return withTx([STORES.libraryEntries], "readwrite", async (s) => {
-    const prev = await reqToPromise(s[STORES.libraryEntries].get(itemId));
-    const next = {
-      ...(prev ?? {}),
+    const prevRaw = await reqToPromise(s[STORES.libraryEntries].get(itemId));
+    const prev = normalizeLibraryEntry(prevRaw ?? {});
+    const transitioningToFinished = prev.status !== "finished" && status === "finished";
+
+    let next = normalizeLibraryEntry({
+      ...(prevRaw ?? {}),
+      ...prev,
       item_id: itemId,
       status,
-      finished_at: status === "finished" ? prev?.finished_at ?? now : null,
-      created_at: prev?.created_at ?? now,
+      finished_at: status === "finished" ? prevRaw?.finished_at ?? now : null,
+      created_at: prevRaw?.created_at ?? now,
       updated_at: now
-    };
+    });
+
+    if (
+      transitioningToFinished &&
+      !next.archived_at &&
+      !next.type_confirmed &&
+      next.type_decision !== "cleared" &&
+      next.type_suggested
+    ) {
+      next = { ...next, type_confirmed: next.type_suggested, type_decision: "confirmed" };
+    }
+    s[STORES.libraryEntries].put(next);
+    return next;
+  });
+}
+
+export async function patchLibraryEntry(itemId, patch) {
+  const now = new Date().toISOString();
+  return withTx([STORES.libraryEntries], "readwrite", async (s) => {
+    const prevRaw = await reqToPromise(s[STORES.libraryEntries].get(itemId));
+    const prev = normalizeLibraryEntry(prevRaw ?? {});
+    const next = normalizeLibraryEntry({
+      ...(prevRaw ?? {}),
+      ...prev,
+      ...(patch ?? {}),
+      item_id: itemId,
+      created_at: prevRaw?.created_at ?? now,
+      updated_at: now
+    });
     s[STORES.libraryEntries].put(next);
     return next;
   });

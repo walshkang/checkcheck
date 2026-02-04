@@ -453,13 +453,70 @@ function renderDetail(state) {
       ? "Not rated yet."
       : "Finish a book to rate it.";
 
+  const cover = item.cover_url
+    ? `<img src="${escapeHtml(item.cover_url)}" alt="" width="40" height="60" style="border-radius:10px; border:1px solid var(--stroke);" loading="lazy" />`
+    : "";
+
+  const TYPE_OPTIONS = ["Fiction", "Short Stories", "Nonfiction", "Essay", "Memoir", "Poetry"];
+  const showSuggested = !isArchived && !entry.type_confirmed && entry.type_decision == null && entry.type_suggested;
+  const typeSuggestedRow = showSuggested
+    ? `<div class="sub">Suggested: ${escapeHtml(entry.type_suggested)}</div>`
+    : "";
+  const selectedType = entry.type_confirmed || "";
+  const typeSelectDisabled = isArchived ? "disabled" : "";
+  const clearDisabled = isArchived ? "disabled" : "";
+  const useSuggestedBtn =
+    showSuggested && entry.type_suggested
+      ? `<button class="btn" type="button" data-action="type:useSuggested" ${isArchived ? "disabled" : ""}>Use suggested</button>`
+      : "";
+
+  const typeSection = `
+    <div data-kind="detail-type">
+      <div class="title">Type</div>
+      ${typeSuggestedRow}
+      <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:8px;">
+        <select class="input" data-action="type:select" ${typeSelectDisabled} style="min-width: 200px;">
+          <option value="" ${selectedType ? "" : "selected"} disabled>Set type…</option>
+          ${TYPE_OPTIONS.map((t) => `<option value="${escapeHtml(t)}" ${selectedType === t ? "selected" : ""}>${escapeHtml(t)}</option>`).join("")}
+        </select>
+        ${useSuggestedBtn}
+        <button class="btn" type="button" data-action="type:clear" ${clearDisabled}>Clear</button>
+      </div>
+    </div>
+  `;
+
+  const tags = Array.isArray(entry.tags) ? entry.tags : [];
+  const tagsSection = `
+    <div style="height:12px;"></div>
+    <div data-kind="detail-tags">
+      <div class="title">Tags</div>
+      <div class="sub">Add tags to remember why you saved this</div>
+      <form class="row" style="gap:8px; flex-wrap:wrap; margin-top:8px;" data-action="tag:add">
+        <input class="input" name="tag" placeholder="Add tag" autocomplete="off" ${isArchived ? "disabled" : ""} style="min-width: 220px; flex: 1;" />
+        <button class="btn" type="submit" ${isArchived ? "disabled" : ""}>Add</button>
+      </form>
+      ${
+        tags.length
+          ? `<div class="row" style="gap:8px; flex-wrap:wrap; margin-top:10px;">
+              ${tags
+                .map((t, i) => `<button class="chip" type="button" data-action="tag:remove" data-tag-idx="${i}" ${isArchived ? "disabled" : ""}>${escapeHtml(t)} ×</button>`)
+                .join("")}
+            </div>`
+          : ""
+      }
+    </div>
+  `;
+
   return `
     <div class="card">
       <div class="row">
-        <div class="stack" style="gap:4px;">
-          <div class="kicker">Detail</div>
-          <h2 style="margin:0;">${itemLine(item)}</h2>
-          <div class="muted">Relative to your library.</div>
+        <div class="row" style="align-items:center; gap:12px;">
+          ${cover}
+          <div class="stack" style="gap:4px;">
+            <div class="kicker">Detail</div>
+            <h2 style="margin:0;">${itemLine(item)}</h2>
+            <div class="muted">Relative to your library.</div>
+          </div>
         </div>
         <button class="btn" data-action="nav:library">Back</button>
       </div>
@@ -486,6 +543,9 @@ function renderDetail(state) {
           <button class="btn" data-action="status:set" data-status="finished" ${isArchived ? "disabled" : ""}>Finished</button>
         </div>
       </div>
+      <div style="height:12px;"></div>
+      ${typeSection}
+      ${tagsSection}
       <div style="height:12px;"></div>
       <div class="btns">
         ${
