@@ -33,7 +33,9 @@ Make the Library mental model crisp:
 
 - Removing the top-level **Mic check** nav surface
 - Changing scoring, curve, hysteresis, or ranking mechanics
-- Adding new data fields (notes, tags, sources) beyond what already exists
+- Adding new data fields (notes, tags, sources) beyond what already exists in this slice
+
+Note: Want-to-read enrichment (suggested type + tags) is specified separately in `docs/WANT_METADATA_PHASE1.md`.
 
 ## Verification
 

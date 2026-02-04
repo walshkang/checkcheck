@@ -35,6 +35,14 @@ Phase 1 uses three primary surfaces:
 - Undo is prominent and reliable.
 - Skip is guilt-free and never penalizes the user.
 
+## Covers (Recognition Only)
+- Covers are allowed in:
+  - Search results
+  - Detail header (recognition), regardless of status
+- Covers are not allowed in:
+  - Finished list (ranking-heavy browsing)
+  - Compare
+
 ## Copy / Semantics
 - Ratings are **relative to your library**.
 - In list views, show quarter stars; in detail view, show rank score + percentile + confidence.

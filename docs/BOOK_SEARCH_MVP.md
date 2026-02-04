@@ -43,6 +43,14 @@ Last updated: 2026-02-04
 - `isbn: string|null`
 - `cover_url: string|null`
 - `first_publish_year: number|null`
+- `raw_subjects: string[]` (preserved for Phase 1 type suggestion; never surfaced directly)
+
+## Want enrichment (Phase 1)
+Search-derived metadata may optionally power a **suggested type** (non-authoritative) and user tags.
+
+- Suggested type is stored on `library_entries.type_suggested` as a **single** string (or null).
+- Raw Open Library subjects are preserved on `items.raw_subjects` for future taxonomy expansion.
+- See `docs/WANT_METADATA_PHASE1.md` for mapping rules, copy guardrails, and cover surface rules.
 
 ## Dedupe Policy (Soft, MVP)
 - Prefer Open Library identity when present:

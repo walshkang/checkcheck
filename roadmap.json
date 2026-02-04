@@ -39,13 +39,15 @@
       "AGENTS.md",
       "CONTEXT.md",
       "docs/RATING_SYSTEM.md",
-      "docs/UX_RULES.md"
+      "docs/UX_RULES.md",
+      "docs/WANT_METADATA_PHASE1.md"
     ],
     "supporting": [
       "docs/PAIR_SELECTION.md",
       "docs/INSTRUMENTATION.md",
       "docs/COPY_TONE.md",
       "docs/BOOK_SEARCH_MVP.md",
+      "docs/WANT_METADATA_PHASE1.md",
       "docs/SIGNAL_VISUAL_LANGUAGE.md"
     ]
   },
@@ -68,6 +70,8 @@
             "Optional: external search integration (later) behind a flag.",
             "Statuses: want / reading / finished; finished_at.",
             "Library sub-views: Want to read (saved queue) vs Finished (rated history).",
+            "Want enrichment (Phase 1): suggested type + user tags (context only; never affects scoring).",
+            "Metadata ingestion (Phase 1): preserve Open Library raw subjects on items for future taxonomy expansion.",
             "De-dupe strategy documented (work vs edition)."
           ],
           "acceptance_criteria": [
