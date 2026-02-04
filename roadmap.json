@@ -48,6 +48,7 @@
       "docs/COPY_TONE.md",
       "docs/BOOK_SEARCH_MVP.md",
       "docs/WANT_METADATA_PHASE1.md",
+      "docs/COMPARE_SLEEK_PHASE1.md",
       "docs/SIGNAL_VISUAL_LANGUAGE.md"
     ]
   },
@@ -85,12 +86,16 @@
           "outcome": "User can complete a 10-comparison sprint with near-zero friction.",
           "scope": [
             "Compare surface (A vs B) with primary actions: A wins / B wins / Skip / Undo.",
+            "Compare input: whole card is tappable; buttons are secondary affordance.",
+            "Pending-lock: prevent interleavings while saving/recomputing (A/B/Skip/Undo).",
+            "Motion: calm press + crossfade only; respect prefers-reduced-motion.",
             "Gate compare until 5 active finished items exist (initiation milestone).",
             "Persist comparison rows (user_id, a, b, winner|null, created_at).",
             "Pair selection: meaningful matchups (see docs/PAIR_SELECTION.md)."
           ],
           "acceptance_criteria": [
             "10 comparisons can be completed in < 60 seconds.",
+            "Rapid double-tap cannot create two comparisons.",
             "Undo reverses the most recent comparison reliably.",
             "Skip does not corrupt scoring."
           ]

@@ -7,12 +7,15 @@ Purpose: tune delight (curve + hysteresis) using real traces.
 - comparison_undo { session_id }
 - compare_session_started { mode: mic_check|after_finish }
 - compare_session_completed { mode, comparisons_count, duration_ms }
+- compare_input { session_id, input: card|button, winner: a|b|skip|undo }
+- compare_pending_lock_blocked { session_id, action: win|skip|undo }
 - item_added { method: manual|search }
 - item_status_changed { from, to }
 - reseed_used { type: reset_display|reset_scores|reset_comparisons }
 
 ## Metrics to watch
 - Time per comparison (median, p90)
+- Time from tap → next pair shown (median, p90)
 - Undo rate
 - Skip rate
 - Session completion rate

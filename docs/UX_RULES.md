@@ -35,6 +35,13 @@ Phase 1 uses three primary surfaces:
 - Undo is prominent and reliable.
 - Skip is guilt-free and never penalizes the user.
 
+## Compare (Input + Motion)
+- Default input is tapping a card (whole card is the control).
+- Buttons remain as a secondary affordance and accessibility fallback.
+- While a comparison is saving/recomputing, lock out all Compare actions (A/B, Skip, Undo) to avoid interleavings.
+- Motion must be calm: press state + crossfade/gentle slide only; no bounce or celebration.
+- Respect `prefers-reduced-motion`.
+
 ## Covers (Recognition Only)
 - Covers are allowed in:
   - Search results

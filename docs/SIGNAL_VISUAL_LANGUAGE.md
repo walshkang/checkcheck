@@ -107,6 +107,7 @@ Illustrations appear only at **conceptual moments**, not operational ones.
 * Subtle only (fade, gentle slide)
 * No bounce, no celebration confetti
 * The confidence comes from *resolution*, not excitement
+* Respect `prefers-reduced-motion`
 
 ---
 
@@ -167,6 +168,7 @@ This is the *home* of the visual language.
 * ❌ No illustration
 * ✅ Minimal UI
 * ✅ Progress indicator (x / 10)
+* ✅ Calm interaction feedback (press + crossfade)
 
 Rationale: Focus beats metaphor mid‑task.
 
@@ -332,4 +334,3 @@ If a screen answers **“What does this mean?”** → Signal visuals may apply.
 ---
 
 **Use this document as a living checklist during design reviews and PRs.**
-

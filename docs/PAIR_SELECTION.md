@@ -22,6 +22,12 @@ Given a target item T (e.g., newly finished, or focus item in a sprint):
 - **Mic check (10 comparisons)**: cycle through multiple target items, weighted toward newest/least-compared items.
 - **After finish (3 comparisons)**: 2 near-neighbor + 1 anchor.
 
+### Optional (measure-first): after_finish sentiment pre-step
+If after-finish completion time remains high even after Compare input polish, consider a tiny pre-step:
+- Prompt: “Quick check — did you like it?” (Liked / Not for me / Skip)
+- Use it only to bias the **step-0 anchor** (slightly above/below median).
+- Must not affect scoring.
+
 ## Avoid
 - Pairing that compares items with huge gaps too often (it feels pointless).
 - Generating the same pair within the last N comparisons (N≈15).

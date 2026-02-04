@@ -30,9 +30,9 @@ Mobile rule: **only one primary surface at a time** (Compare > Detail > Library)
 - Stars display uses quarter steps (0.25) and is rendered via SVG for clarity.
 
 ## Immediate Work (next 1–2 slices)
-1. Detail trust tools polish: “Place this book” loop, explanation clarity, and fewer sharp edges.
-2. Want-to-read enrichment: sources/notes + add-from-search flow tuned for saving.
-3. Instrumentation: track initiation rate at 5 finished, mic-check completion time, and after-finish usage.
+1. Compare sleekness: tap-to-choose cards + calm commit motion + pending-lock (see docs/COMPARE_SLEEK_PHASE1.md).
+2. Detail trust tools polish: “Place this book” loop, explanation clarity, and fewer sharp edges.
+3. Instrumentation: track tap-to-next latency, mic-check completion time, and after-finish usage.
 
 ## Open Questions (intentionally deferred unless blocking)
 - Work vs edition identity: do we de-dupe by title+author only (MVP), or support editions later?
