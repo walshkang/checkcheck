@@ -3,6 +3,7 @@ import { recomputeDerived } from "../rating/recompute.js";
 import * as idb from "../storage/idb.js";
 import { pickPair } from "./pairs.js";
 import { renderApp } from "./render.js";
+import { searchOpenLibrary } from "./catalog/openlibrary.js";
 
 function byId(arr) {
   const m = new Map();
@@ -30,6 +31,9 @@ export async function startApp() {
   const root = document.getElementById("app");
   if (!root) throw new Error("Missing #app");
 
+  const qs = new URLSearchParams(location.search);
+  const searchEnabled = qs.get("search") === "1" || qs.has("search");
+
   const state = {
     surface: "library",
     items: [],
@@ -48,7 +52,14 @@ export async function startApp() {
     detailItemId: null,
     session: null,
     currentPair: null,
-    toast: null
+    toast: null,
+
+    searchEnabled,
+    searchQuery: "",
+    searchStatus: "idle", // idle | loading | done | error
+    searchResults: [],
+    searchError: null,
+    searchRequestId: 0
   };
 
   function setToast(msg, { hint = null, ms = 2500 } = {}) {
@@ -212,6 +223,84 @@ export async function startApp() {
     render();
   }
 
+  async function handleSearchOpenLibrary(form) {
+    if (!state.searchEnabled) return;
+
+    const fd = new FormData(form);
+    const q = String(fd.get("q") || "").trim();
+    state.searchQuery = q;
+
+    if (!q) {
+      state.searchStatus = "idle";
+      state.searchResults = [];
+      state.searchError = null;
+      render();
+      return;
+    }
+
+    state.searchStatus = "loading";
+    state.searchError = null;
+    render();
+
+    const reqId = ++state.searchRequestId;
+    try {
+      const results = await searchOpenLibrary(q, { limit: 10 });
+      if (reqId !== state.searchRequestId) return; // stale response
+      state.searchResults = results;
+      state.searchStatus = "done";
+      state.searchError = null;
+      render();
+    } catch (e) {
+      if (reqId !== state.searchRequestId) return;
+      state.searchStatus = "error";
+      state.searchResults = [];
+      state.searchError = String(e?.message ?? e);
+      setToast("Search failed.", { hint: navigator.onLine ? state.searchError : "You’re offline." });
+      render();
+    }
+  }
+
+  function normalizeKey(title, author) {
+    return `${String(title || "").trim().toLowerCase()}|${String(author || "").trim().toLowerCase()}`;
+  }
+
+  async function handleAddFromSearch(idx) {
+    const r = state.searchResults[idx];
+    if (!r) return;
+
+    const sourceKey = r?.source?.provider === "openlibrary" ? r.source.key : null;
+    const existsBySource =
+      sourceKey &&
+      state.items.some((it) => it?.source?.provider === "openlibrary" && it?.source?.key === sourceKey);
+    if (existsBySource) {
+      setToast("Already in your library.", { hint: "Relative to your library." });
+      return;
+    }
+
+    const key = normalizeKey(r.title, r.author);
+    const existsByText = !sourceKey && state.items.some((it) => normalizeKey(it.title, it.author) === key);
+    if (existsByText) {
+      setToast("Already in your library.", { hint: "Try a different edition or spelling." });
+      return;
+    }
+
+    const { item, entry } = await idb.addItem({
+      title: r.title,
+      author: r.author,
+      source: r.source ?? null,
+      isbn: r.isbn ?? null,
+      cover_url: r.cover_url ?? null,
+      first_publish_year: r.first_publish_year ?? null
+    });
+
+    state.items.push(item);
+    state.itemsById.set(item.id, item);
+    state.libraryEntries.push(entry);
+    state.libraryByItemId.set(item.id, entry);
+    render();
+    setToast("Added.", { hint: "Ratings are relative to your library." });
+  }
+
   async function handleSetStatus(itemId, status) {
     const entry = await idb.setLibraryStatus(itemId, status);
     state.libraryByItemId.set(itemId, entry);
@@ -302,6 +391,10 @@ export async function startApp() {
       ev.preventDefault();
       handleAddItem(form).catch((e) => alert(String(e)));
     }
+    if (action === "search:openlibrary") {
+      ev.preventDefault();
+      handleSearchOpenLibrary(form).catch((e) => alert(String(e)));
+    }
   });
 
   root.addEventListener("click", (ev) => {
@@ -363,6 +456,22 @@ export async function startApp() {
       if (!itemId) return;
       if (nextStatus !== "want" && nextStatus !== "reading" && nextStatus !== "finished") return;
       return void handleSetStatus(itemId, nextStatus).catch((e) => alert(String(e)));
+    }
+
+    if (action === "search:add") {
+      const idx = Number(el.getAttribute("data-result-idx") || "-1");
+      if (!Number.isFinite(idx) || idx < 0) return;
+      return void handleAddFromSearch(idx).catch((e) => alert(String(e)));
+    }
+
+    if (action === "search:clear") {
+      state.searchQuery = "";
+      state.searchResults = [];
+      state.searchStatus = "idle";
+      state.searchError = null;
+      state.searchRequestId++;
+      render();
+      return;
     }
 
     if (action === "status:set") {

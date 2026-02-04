@@ -64,9 +64,16 @@ export async function loadAll() {
   });
 }
 
-export async function addItem({ title, author }) {
+export async function addItem({ title, author, source = null, isbn = null, cover_url = null, first_publish_year = null }) {
   const now = new Date().toISOString();
+  const meta = {
+    source: source ?? null,
+    isbn: isbn ?? null,
+    cover_url: cover_url ?? null,
+    first_publish_year: first_publish_year ?? null
+  };
   const item = {
+    ...meta,
     id: crypto.randomUUID(),
     title: String(title || "").trim(),
     author: String(author || "").trim(),

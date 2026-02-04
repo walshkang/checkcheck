@@ -92,6 +92,7 @@ function renderLibrary(state) {
   const canCompare = state.finishedIds.length >= 2;
   const empty = state.items.length === 0;
   const addLabel = empty ? "Add your first book" : "Add book";
+  const searchPanel = renderSearchPanel(state);
 
   const listItems = state.libraryRows
     .map((row) => {
@@ -137,6 +138,7 @@ function renderLibrary(state) {
           <input class="input" name="author" placeholder="Author (optional)" autocomplete="off" />
           <button class="btn primary" type="submit">${addLabel}</button>
         </form>
+        ${searchPanel}
         <div style="height:12px;"></div>
         <div class="row">
           <button class="btn primary" data-action="start:miccheck" ${canCompare ? "" : "disabled"}>
@@ -156,6 +158,70 @@ function renderLibrary(state) {
         }
       </div>
     </div>
+  `;
+}
+
+function renderSearchPanel(state) {
+  if (!state.searchEnabled) return "";
+
+  const q = escapeHtml(state.searchQuery || "");
+  const status = state.searchStatus || "idle";
+
+  const header =
+    status === "loading"
+      ? `<div class="muted">Searching…</div>`
+      : status === "done" && state.searchResults.length === 0
+        ? `<div class="muted">No results.</div>`
+        : status === "error"
+          ? `<div class="muted">Search error.</div>`
+          : `<div class="muted">Search Open Library</div>`;
+
+  const results =
+    state.searchResults?.length
+      ? `<ul class="list" style="margin-top:10px;">
+          ${state.searchResults
+            .map((r, i) => {
+              const title = escapeHtml(r.title || "");
+              const author = escapeHtml(r.author || "");
+              const year = r.first_publish_year
+                ? ` · <span class="muted">${escapeHtml(r.first_publish_year)}</span>`
+                : "";
+              const cover = r.cover_url
+                ? `<img src="${escapeHtml(r.cover_url)}" alt="" width="32" height="48" style="border-radius:8px; border:1px solid var(--stroke);" loading="lazy" />`
+                : `<div style="width:32px; height:48px; border-radius:8px; border:1px solid var(--stroke); background: rgba(255,255,255,0.4);"></div>`;
+
+              return `
+                <li class="search-item" data-kind="search-result">
+                  <div class="row" style="align-items:center;">
+                    ${cover}
+                    <div class="stack" style="gap:2px; margin-left:10px; flex:1;">
+                      <div class="title">${title}</div>
+                      <div class="sub">${author || `<span class="muted">Unknown author</span>`}${year}</div>
+                    </div>
+                    <button class="btn" type="button" data-action="search:add" data-result-idx="${i}">Add</button>
+                  </div>
+                </li>
+              `;
+            })
+            .join("")}
+        </ul>`
+      : "";
+
+  const errorHint =
+    status === "error" && state.searchError
+      ? `<div class="muted" style="margin-top:8px; font-size:12px;">${escapeHtml(state.searchError)}</div>`
+      : "";
+
+  return `
+    <div style="height:12px;"></div>
+    ${header}
+    <form class="row" style="gap:8px; margin-top:8px;" data-action="search:openlibrary">
+      <input class="input" name="q" placeholder="Search title or author" autocomplete="off" value="${q}" />
+      <button class="btn" type="submit" ${status === "loading" ? "disabled" : ""}>Search</button>
+      <button class="btn" type="button" data-action="search:clear">Clear</button>
+    </form>
+    ${errorHint}
+    ${results}
   `;
 }
 

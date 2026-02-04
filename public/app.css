@@ -238,6 +238,17 @@ input {
   border-color: rgba(0, 0, 0, 0.22);
 }
 
+.search-item {
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.62);
+  padding: 10px 12px;
+}
+
+.search-item:hover {
+  border-color: rgba(0, 0, 0, 0.22);
+}
+
 .title {
   font-weight: 650;
   letter-spacing: -0.01em;
