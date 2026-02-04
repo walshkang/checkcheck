@@ -166,6 +166,7 @@ function renderSearchPanel(state) {
 
   const q = escapeHtml(state.searchQuery || "");
   const status = state.searchStatus || "idle";
+  const langMode = state.searchLangMode === "any" ? "any" : "prefer_en";
 
   const header =
     status === "loading"
@@ -215,8 +216,12 @@ function renderSearchPanel(state) {
   return `
     <div style="height:12px;"></div>
     ${header}
-    <form class="row" style="gap:8px; margin-top:8px;" data-action="search:openlibrary">
-      <input class="input" name="q" placeholder="Search title or author" autocomplete="off" value="${q}" />
+    <form class="row" style="gap:8px; margin-top:8px; flex-wrap:wrap;" data-action="search:openlibrary">
+      <select class="input" name="lang_mode" style="min-width: 160px;">
+        <option value="prefer_en" ${langMode === "prefer_en" ? "selected" : ""}>Prefer English</option>
+        <option value="any" ${langMode === "any" ? "selected" : ""}>Any language</option>
+      </select>
+      <input class="input" name="q" placeholder="Search title or author" autocomplete="off" value="${q}" style="flex: 1; min-width: 220px;" />
       <button class="btn" type="submit" ${status === "loading" ? "disabled" : ""}>Search</button>
       <button class="btn" type="button" data-action="search:clear">Clear</button>
     </form>

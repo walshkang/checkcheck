@@ -55,6 +55,7 @@ export async function startApp() {
     toast: null,
 
     searchEnabled,
+    searchLangMode: "prefer_en", // prefer_en | any
     searchQuery: "",
     searchStatus: "idle", // idle | loading | done | error
     searchResults: [],
@@ -228,6 +229,8 @@ export async function startApp() {
 
     const fd = new FormData(form);
     const q = String(fd.get("q") || "").trim();
+    const langMode = String(fd.get("lang_mode") || "prefer_en");
+    state.searchLangMode = langMode === "any" ? "any" : "prefer_en";
     state.searchQuery = q;
 
     if (!q) {
@@ -244,7 +247,7 @@ export async function startApp() {
 
     const reqId = ++state.searchRequestId;
     try {
-      const results = await searchOpenLibrary(q, { limit: 10 });
+      const results = await searchOpenLibrary(q, { limit: 10, langMode: state.searchLangMode });
       if (reqId !== state.searchRequestId) return; // stale response
       state.searchResults = results;
       state.searchStatus = "done";

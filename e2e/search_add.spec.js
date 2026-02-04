@@ -9,6 +9,8 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/openlibrary.org/search.json**", async (route) => {
     const u = new URL(route.request().url());
     const q = u.searchParams.get("q") || "";
+    // Default search behavior is "Prefer English".
+    expect(u.searchParams.get("lang")).toBe("en");
     const payload = {
       docs: [
         {
@@ -94,4 +96,3 @@ test("Search (flagged) -> add -> export contains optional fields -> wipe -> impo
   expect(item2).toHaveProperty("cover_url");
   expect(item2).toHaveProperty("first_publish_year", 2001);
 });
-

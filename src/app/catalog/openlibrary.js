@@ -9,13 +9,14 @@ function toCoverUrl({ cover_i, isbn }, size = "S") {
   return null;
 }
 
-export async function searchOpenLibrary(q, { limit = 10 } = {}) {
+export async function searchOpenLibrary(q, { limit = 10, langMode = "prefer_en" } = {}) {
   const query = String(q || "").trim();
   if (!query) return [];
 
   const url = new URL("https://openlibrary.org/search.json");
   url.searchParams.set("q", query);
   url.searchParams.set("limit", String(limit));
+  if (langMode === "prefer_en") url.searchParams.set("lang", "en");
   url.searchParams.set(
     "fields",
     ["key", "title", "author_name", "first_publish_year", "isbn", "cover_i"].join(",")
@@ -40,4 +41,3 @@ export async function searchOpenLibrary(q, { limit = 10 } = {}) {
     };
   });
 }
-
