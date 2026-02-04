@@ -326,6 +326,12 @@ input {
   border-style: dashed;
 }
 
+button.chip.icon {
+  padding: 6px 9px;
+  font-size: 13px;
+  line-height: 1;
+}
+
 button.chip {
   cursor: pointer;
 }

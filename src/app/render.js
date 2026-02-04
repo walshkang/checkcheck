@@ -153,6 +153,10 @@ function renderLibrary(state) {
 	          ? `<span class="chip">${escapeHtml(entry.type_confirmed)}</span>`
 	          : `<span class="chip suggested" title="Suggested from metadata">${escapeHtml(entry.type_suggested)}</span>`
 	        : "";
+	      const quickFinish =
+	        !isArchived && state.libraryView === "want" && entry.status !== "finished"
+	          ? `<button class="chip icon" type="button" data-action="quick:finish" data-item-id="${escapeHtml(item.id)}" aria-label="Mark finished" title="Mark finished">✓</button>`
+	          : "";
 	      const scoredCount = state.scoredIds?.length ?? 0;
 	      const sub = isArchived
 	        ? "Archived — restore to compare."
@@ -183,6 +187,7 @@ function renderLibrary(state) {
 		            </div>
 			            <div class="stack" style="align-items:flex-end; gap:8px;">
 			              ${ratingSlot}
+			              ${quickFinish}
 			              ${typeChip}
 			              ${isArchived ? `<span class="chip">Archived</span>` : ""}
 	            </div>

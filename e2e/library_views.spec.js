@@ -17,7 +17,10 @@ test("Library Want/Finished sub-views reflect status membership", async ({ page 
   await expect(page.locator('.list-item[data-kind="library-item"]', { hasText: "Queue Book" })).toHaveCount(0);
 
   await setLibraryView(page, "want");
-  await setRowFinished(page, "Queue Book", true);
+  // Quick mark-finished affordance exists in Want view (icon-only).
+  const rowWant = page.locator('.list-item[data-kind="library-item"]', { hasText: "Queue Book" }).first();
+  await expect(rowWant.locator('button.chip.icon[data-action="quick:finish"]')).toBeVisible();
+  await rowWant.locator('button.chip.icon[data-action="quick:finish"]').click();
 
   await setLibraryView(page, "finished");
   await expect(page.locator('.list-item[data-kind="library-item"]', { hasText: "Queue Book" })).toBeVisible();
@@ -26,4 +29,3 @@ test("Library Want/Finished sub-views reflect status membership", async ({ page 
   const row = page.locator('.list-item[data-kind="library-item"]', { hasText: "Queue Book" }).first();
   await expect(row.locator('button.chip[data-action="quick:status"]')).toHaveCount(0);
 });
-

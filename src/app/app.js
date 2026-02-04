@@ -755,6 +755,14 @@ export async function startApp() {
       return;
     }
 
+    if (action === "quick:finish") {
+      const itemId = el.getAttribute("data-item-id");
+      if (!itemId) return;
+      const entry = state.libraryByItemId.get(itemId);
+      if (!entry || entry.archived_at || entry.status === "finished") return;
+      return void handleSetStatus(itemId, "finished").catch((e) => alert(String(e)));
+    }
+
     if (action === "search:add") {
       const idx = Number(el.getAttribute("data-result-idx") || "-1");
       if (!Number.isFinite(idx) || idx < 0) return;
