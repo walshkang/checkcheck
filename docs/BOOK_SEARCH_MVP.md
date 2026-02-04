@@ -14,9 +14,9 @@ Last updated: 2026-02-04
 - No persistence of search queries/results.
 
 ## Feature Flag
-- Default OFF.
-- Enable via query param `?search=1`.
-- The presence of the search panel must not change behavior when the flag is off.
+- Default ON.
+- Hide via query param `?search=0` (or `?search=false` / `?search=off`).
+- Search remains best-effort; manual add always works.
 
 ## UI Shape (Repo-Native)
 - Library surface includes a second form: `data-action="search:openlibrary"`.
@@ -63,7 +63,7 @@ Last updated: 2026-02-04
 
 ## E2E Tests (Playwright)
 - Do not hit real Open Library in CI; mock `fetch` with Playwright routing.
-- With current Playwright config (`baseURL` includes `/public`), use `page.goto("/?search=1")` to enable the panel.
+- With current Playwright config (`baseURL` includes `/public`), you can use `page.goto("/")` (panel shown by default).
 - Add one spec covering:
 - Search panel appears only when flag is on.
 - Search request is made; results render under `data-kind="search-result"`.
@@ -83,4 +83,3 @@ Last updated: 2026-02-04
 ## Risks / Contingencies
 - Open Library CORS or availability issues: search is best-effort; degrade gracefully. If persistent, defer search until a server proxy exists.
 - Dedupe ambiguity (work vs edition): intentionally deferred; soft checks only.
-

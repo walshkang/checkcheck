@@ -32,7 +32,9 @@ export async function startApp() {
   if (!root) throw new Error("Missing #app");
 
   const qs = new URLSearchParams(location.search);
-  const searchEnabled = qs.get("search") === "1" || qs.has("search");
+  // Search is now shown by default. You can hide it with `?search=0`.
+  const searchParam = qs.get("search");
+  const searchEnabled = !(searchParam === "0" || searchParam === "false" || searchParam === "off");
 
   const state = {
     surface: "library",
