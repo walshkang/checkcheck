@@ -283,6 +283,38 @@ input {
   margin-top: 2px;
 }
 
+.authorLine {
+  color: var(--muted);
+  font-size: 13px;
+  font-style: italic;
+  margin-top: 2px;
+}
+
+.rankBadge {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: 8px;
+}
+
+.rankScore {
+  font-family: var(--mono);
+  font-size: 12px;
+  margin-top: -2px;
+}
+
+.tone-good {
+  color: var(--accent);
+}
+
+.tone-mid {
+  color: var(--accent2);
+}
+
+.tone-bad {
+  color: var(--danger);
+}
+
 .stars {
   --stars-size: 13px;
   display: inline-flex;

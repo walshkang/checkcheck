@@ -49,10 +49,20 @@ function renderStars(starsDisplay, { sizePx = null, step = 0.25 } = {}) {
   `;
 }
 
-function itemLine(item) {
-  const title = escapeHtml(item?.title ?? "");
-  const author = escapeHtml(item?.author ?? "");
-  return author ? `${title} <span class="muted">·</span> <span class="muted">${author}</span>` : title;
+function itemTitle(item) {
+  return escapeHtml(item?.title ?? "");
+}
+
+function itemAuthor(item) {
+  return escapeHtml(item?.author ?? "");
+}
+
+function toneFromPercentile(p) {
+  const x = Number(p);
+  if (!Number.isFinite(x)) return "tone-mid";
+  if (x >= 0.66) return "tone-good";
+  if (x >= 0.33) return "tone-mid";
+  return "tone-bad";
 }
 
 export function renderApp(state) {
@@ -132,17 +142,25 @@ function renderLibrary(state) {
     return row.entry.status === "want" || row.entry.status === "reading";
   });
 
-  const listItems = listRows
-	    .map((row) => {
-	      const { item, entry, derived, rank } = row;
-	      const isArchived = !!entry.archived_at;
-	      const isFinishedActive = entry.status === "finished" && !isArchived;
-	      const isRated = !!derived && derived.stars_display != null;
-	      const stars = isRated ? renderStars(derived.stars_display) : "";
+	  const listItems = listRows
+		    .map((row) => {
+		      const { item, entry, derived, rank } = row;
+		      const isArchived = !!entry.archived_at;
+		      const isFinishedActive = entry.status === "finished" && !isArchived;
+		      const isRated = !!derived && derived.stars_display != null;
+		      const stars = isRated ? renderStars(derived.stars_display) : "";
+		      const rankScore =
+		        isRated && derived
+		          ? `<div class="rankScore ${toneFromPercentile(derived.percentile)}">${escapeHtml(
+		              derived.rank_score_raw.toFixed(2)
+		            )} / 5.00</div>`
+		          : "";
 	      const ratingSlot =
 	        state.libraryView === "finished" && isFinishedActive && !isRated
 	          ? `<span class="chip">Not rated</span>`
-	          : stars || "";
+	          : stars
+	            ? `${stars}${rankScore}`
+	            : "";
 	      const showTypeChip =
 	        !isArchived &&
 	        state.libraryView === "want" &&
@@ -162,9 +180,13 @@ function renderLibrary(state) {
 	        ? "Archived — restore to compare."
 	        : isFinishedActive
           ? isRated
-            ? `${derived.rank_score_raw.toFixed(2)} / 5.00 · Rank #${rank} of ${scoredCount} · ${formatTopPct(derived.percentile)} · Based on ${derived.comparisons_count} comparisons`
+            ? `Rank #${rank} of ${scoredCount} · ${formatTopPct(derived.percentile)} · Based on ${derived.comparisons_count} comparisons`
             : "Not rated yet — do a mic check."
           : "Add a few finished books, then we’ll do a quick mic check to rank them.";
+        const titlePrefix =
+          state.libraryView === "finished" && isFinishedActive && isRated
+            ? `<span class="rankBadge">#${escapeHtml(rank)}</span>`
+            : "";
       const showFinishPrompt =
         state.finishPromptItemId === item.id && isFinishedActive && decidedComparisonsCount > 0;
       const finishPrompt = showFinishPrompt
@@ -182,7 +204,8 @@ function renderLibrary(state) {
         <li class="list-item" data-kind="library-item" data-action="open:detail" data-item-id="${escapeHtml(item.id)}">
 	            <div class="row">
 	            <div class="stack" style="gap:4px;">
-		              <div class="title">${itemLine(item)}</div>
+		              <div class="title">${titlePrefix}${itemTitle(item)}</div>
+		              ${itemAuthor(item) ? `<div class="authorLine">${itemAuthor(item)}</div>` : ""}
 		              <div class="sub">${escapeHtml(sub)}</div>
 		            </div>
 			            <div class="stack" style="align-items:flex-end; gap:8px;">
@@ -403,12 +426,14 @@ function renderCompare(state) {
       <div style="height:12px;"></div>
 	        <div class="compareCards${enter}">
 	          <div class="${cardClassA}" data-action="compare:win" data-winner="a" role="button" aria-label="Choose A">
-	            <div class="title">${itemLine(itemA)}</div>
+	            <div class="title">${itemTitle(itemA)}</div>
+	            ${itemAuthor(itemA) ? `<div class="authorLine">${itemAuthor(itemA)}</div>` : ""}
 	            <div class="sub">Relative to your library.</div>
 	          ${starsA ? `<div style="height:10px;"></div>${starsA}` : ""}
 	          </div>
 	          <div class="${cardClassB}" data-action="compare:win" data-winner="b" role="button" aria-label="Choose B">
-	            <div class="title">${itemLine(itemB)}</div>
+	            <div class="title">${itemTitle(itemB)}</div>
+	            ${itemAuthor(itemB) ? `<div class="authorLine">${itemAuthor(itemB)}</div>` : ""}
 	            <div class="sub">Relative to your library.</div>
 	          ${starsB ? `<div style="height:10px;"></div>${starsB}` : ""}
 	          </div>
@@ -449,10 +474,17 @@ function renderDetail(state) {
   const stacked = isArchived
     ? "Archived."
     : isRated
-    ? `${derived.rank_score_raw.toFixed(2)} / 5.00 · Rank #${rank} of ${scoredCount} · ${formatTopPct(derived.percentile)}`
+    ? `Rank #${rank} of ${scoredCount} · ${formatTopPct(derived.percentile)}`
     : isActiveFinished
       ? "Not rated yet."
       : "Finish a book to rate it.";
+
+  const rankScoreLine =
+    isRated && derived
+      ? `<div class="rankScore ${toneFromPercentile(derived.percentile)}">${escapeHtml(
+          derived.rank_score_raw.toFixed(2)
+        )} / 5.00</div>`
+      : "";
 
   const cover = item.cover_url
     ? `<img src="${escapeHtml(item.cover_url)}" alt="" width="40" height="60" style="border-radius:10px; border:1px solid var(--stroke);" loading="lazy" />`
@@ -515,7 +547,8 @@ function renderDetail(state) {
           ${cover}
           <div class="stack" style="gap:4px;">
             <div class="kicker">Detail</div>
-            <h2 style="margin:0;">${itemLine(item)}</h2>
+            <h2 style="margin:0;">${itemTitle(item)}</h2>
+            ${itemAuthor(item) ? `<div class="authorLine">${itemAuthor(item)}</div>` : ""}
             <div class="muted">Relative to your library.</div>
           </div>
         </div>
@@ -524,8 +557,9 @@ function renderDetail(state) {
 	      <div style="height:12px;"></div>
 	      ${
 	        stars
-	          ? `<div class="row">
+	          ? `<div class="stack" style="gap:6px;">
 	              ${stars}
+	              ${rankScoreLine}
 	              <div class="chip">${escapeHtml(stacked)}</div>
 	            </div>`
 	          : `<div class="chip">${escapeHtml(stacked)}</div>`
