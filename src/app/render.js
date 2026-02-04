@@ -106,7 +106,7 @@ function renderLibrary(state) {
           : "Not rated yet — do a mic check."
         : "Add a few finished books, then we’ll do a quick mic check to rank them.";
       return `
-        <li class="list-item" data-action="open:detail" data-item-id="${escapeHtml(item.id)}">
+        <li class="list-item" data-kind="library-item" data-action="open:detail" data-item-id="${escapeHtml(item.id)}">
           <div class="row">
             <div class="stack" style="gap:4px;">
               <div class="title">${itemLine(item)}</div>

@@ -55,10 +55,9 @@ test("Export -> wipe -> import restores library and comparisons", async ({ page 
   await chooser.setFiles(outPath);
 
   // After import, both items should be visible again.
-  await expect(page.locator(".list-item", { hasText: "Exported" })).toBeVisible();
-  await expect(page.locator(".list-item", { hasText: "Imported" })).toBeVisible();
+  await expect(page.locator('.list-item[data-kind="library-item"]', { hasText: "Exported" })).toBeVisible();
+  await expect(page.locator('.list-item[data-kind="library-item"]', { hasText: "Imported" })).toBeVisible();
 
   // And footer should reflect at least 1 comparison.
   await expect(page.getByText(/Comparisons:\s*[1-9]/)).toBeVisible();
 });
-

@@ -32,13 +32,13 @@ test("Reset display clears ratings; next decided comparison bootstraps only invo
   await page.locator('[data-action="nav:library"]').click();
 
   // At least one item should now have stars, but at least one can still be not rated.
-  const starsCountBefore = (await page.locator(".list-item .stars").count());
+  const starsCountBefore = (await page.locator('.list-item[data-kind="library-item"] .stars').count());
   expect(starsCountBefore).toBeGreaterThan(0);
 
   // Reset display removes ratings entirely.
   await resetDisplay(page);
-  await expect(page.locator(".list-item .stars")).toHaveCount(0);
-  await expect(page.locator(".list-item").filter({ hasText: "Not rated" })).toHaveCount(3);
+  await expect(page.locator('.list-item[data-kind="library-item"] .stars')).toHaveCount(0);
+  await expect(page.locator('.list-item[data-kind="library-item"]').filter({ hasText: "Not rated" })).toHaveCount(3);
 
   // Next decided comparison should bootstrap stars for the involved pair only.
   await startMicCheck(page);
@@ -62,4 +62,3 @@ test("Reset display clears ratings; next decided comparison bootstraps only invo
   expect(remaining).toBeTruthy();
   expect(await rowHasNotRated(page, remaining)).toBe(true);
 });
-

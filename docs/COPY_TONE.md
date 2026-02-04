@@ -102,7 +102,7 @@ CTAs:
 - “Couldn’t save that. Try again?”
 
 ### Offline
-- “You’re offline. We’ll sync when you’re back.”
+- “You’re offline. Some things may not work until you’re back.”
 
 ## “Not for me” / low ratings
 If you add a “DNF / Not for me” affordance, keep it neutral:
@@ -125,4 +125,3 @@ When a star changes:
 - Any time a number is shown, explain it with a phrase:
   - “Relative to your library”
   - “Based on N comparisons”
-

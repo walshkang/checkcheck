@@ -26,7 +26,7 @@ export async function addBook(page, { title, author }) {
 }
 
 export function getRowByTitle(page, title) {
-  return page.locator(".list-item").filter({ hasText: title }).first();
+  return page.locator('.list-item[data-kind="library-item"]').filter({ hasText: title }).first();
 }
 
 export async function setRowFinished(page, title, finished) {
@@ -82,4 +82,3 @@ export async function rowHasNotRated(page, title) {
   const row = getRowByTitle(page, title);
   return (await row.locator(".chip").filter({ hasText: "Not rated" }).count()) > 0;
 }
-
