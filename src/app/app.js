@@ -440,7 +440,8 @@ export async function startApp() {
       mode: state.session.mode
     });
     state.comparisons.push(c);
-    await recomputeAndPersistWithBootstrap([a, b]);
+    // Bootstrap ratings only on *decided* comparisons. A Skip should not resurrect ratings after "Reset display".
+    await recomputeAndPersistWithBootstrap(winnerId ? [a, b] : []);
     render();
   }
 
@@ -448,7 +449,8 @@ export async function startApp() {
     const deleted = await idb.deleteLastComparison();
     if (!deleted) return;
     state.comparisons = state.comparisons.filter((c) => c.id !== deleted.id);
-    await recomputeAndPersistWithBootstrap([deleted.item_a_id, deleted.item_b_id]);
+    // Undo should not bootstrap ratings either; just recompute from truth.
+    await recomputeAndPersistWithBootstrap([]);
     render();
   }
 
