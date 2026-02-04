@@ -38,6 +38,57 @@ function chooseNearNeighbor(targetId, finishedIds, derivedById) {
   return randomPick(candidates);
 }
 
+function chooseNeighborByElo(targetId, candidateIds, derivedById, { recent, recentCheck } = {}) {
+  const targetElo = derivedById?.get(targetId)?.elo ?? 1500;
+  const ranked = candidateIds
+    .map((id) => {
+      const d = derivedById?.get(id);
+      const elo = d?.elo ?? 1500;
+      const diff = Math.abs(elo - targetElo);
+      const comps = d?.comparisons_count ?? 0;
+      return { id, diff, comps };
+    })
+    .sort((a, b) => {
+      if (a.diff < b.diff) return -1;
+      if (a.diff > b.diff) return 1;
+      if (a.comps > b.comps) return -1;
+      if (a.comps < b.comps) return 1;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+
+  if (!recentCheck) return ranked.length ? ranked[0].id : null;
+
+  for (const r of ranked) {
+    if (!recentCheck(targetId, r.id)) return r.id;
+  }
+  return ranked.length ? ranked[0].id : null;
+}
+
+function chooseMedianAnchor(targetId, candidateIds, derivedById, { recentCheck } = {}) {
+  // Prefer anchors that are already rated; otherwise fall back to any candidate.
+  const rated = candidateIds.filter((id) => derivedById?.get(id)?.is_rated);
+  const pool = rated.length ? rated : candidateIds;
+  if (!pool.length) return null;
+
+  const sorted = pool
+    .map((id) => ({ id, elo: derivedById?.get(id)?.elo ?? 1500, comps: derivedById?.get(id)?.comparisons_count ?? 0 }))
+    .sort((a, b) => {
+      if (a.elo < b.elo) return -1;
+      if (a.elo > b.elo) return 1;
+      if (a.comps > b.comps) return -1;
+      if (a.comps < b.comps) return 1;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+
+  const mid = Math.floor(sorted.length / 2);
+  const candidates = [sorted[mid], sorted[mid - 1], sorted[mid + 1]].filter(Boolean);
+  if (!recentCheck) return candidates[0].id;
+  for (const c of candidates) {
+    if (!recentCheck(targetId, c.id)) return c.id;
+  }
+  return candidates[0].id;
+}
+
 function chooseFocusItem(finishedIds, derivedById) {
   // Bias toward least-compared items so calibration spreads.
   const weighted = finishedIds
@@ -51,7 +102,10 @@ export function pickPair({
   finishedIds,
   comparisons,
   derivedById,
+  mode = "mic_check",
   targetId = null,
+  stepIndex = 0,
+  usedOpponentIds = null,
   recentWindow = 15
 }) {
   if (finishedIds.length < 2) return null;
@@ -76,6 +130,24 @@ export function pickPair({
     return { a, b };
   }
 
+  if (mode === "after_finish" && targetId && finishedIds.includes(targetId)) {
+    const used = usedOpponentIds instanceof Set ? usedOpponentIds : new Set(usedOpponentIds || []);
+    let candidates = finishedIds.filter((id) => id !== targetId && !used.has(id));
+    if (!candidates.length) candidates = finishedIds.filter((id) => id !== targetId);
+
+    let opponent = null;
+    if (stepIndex === 0) {
+      opponent = chooseMedianAnchor(targetId, candidates, derivedById, { recentCheck: isRecent });
+    } else {
+      opponent = chooseNeighborByElo(targetId, candidates, derivedById, { recent, recentCheck: isRecent });
+    }
+    if (!opponent) return null;
+
+    // Deterministic side swap to reduce "always left" bias.
+    const flip = stepIndex % 2 === 1;
+    return flip ? { a: opponent, b: targetId } : { a: targetId, b: opponent };
+  }
+
   // Day-1 rule:
   // - <4 finished => random pairs (no recent repeats if possible)
   // - else 70% near-neighbor, 30% random
@@ -90,4 +162,3 @@ export function pickPair({
 
   return pickRandomPair();
 }
-

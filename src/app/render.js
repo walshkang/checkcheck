@@ -110,6 +110,19 @@ function renderLibrary(state) {
             ? `${derived.rank_score_raw.toFixed(2)} / 5.00 · Rank #${rank} of ${scoredCount} · ${formatTopPct(derived.percentile)} · Based on ${derived.comparisons_count} comparisons`
             : "Not rated yet — do a mic check."
           : "Add a few finished books, then we’ll do a quick mic check to rank them.";
+      const showFinishPrompt =
+        state.finishPromptItemId === item.id && isFinishedActive && state.finishedIds.length >= 2;
+      const finishPrompt = showFinishPrompt
+        ? `
+            <div class="inlinePrompt">
+              <div class="muted">Want to tighten this?</div>
+              <div class="row" style="justify-content:flex-start; gap:10px; margin-top:6px;">
+                <button class="btn primary" type="button" data-action="start:focus" data-item-id="${escapeHtml(item.id)}">Do 3 more comparisons</button>
+                <button class="link" type="button" data-action="finishprompt:dismiss">Dismiss</button>
+              </div>
+            </div>
+          `
+        : "";
       return `
         <li class="list-item" data-kind="library-item" data-action="open:detail" data-item-id="${escapeHtml(item.id)}">
           <div class="row">
@@ -127,6 +140,7 @@ function renderLibrary(state) {
               ${isFinishedActive && !isRated ? `<span class="chip">Not rated</span>` : ""}
             </div>
           </div>
+          ${finishPrompt}
         </li>
       `;
     })

@@ -59,6 +59,9 @@ export async function startApp() {
 
     showArchived: false,
 
+    finishPromptItemId: null,
+    finishPromptToken: null,
+
     searchEnabled,
     searchLangMode: "prefer_en", // prefer_en | any
     searchQuery: "",
@@ -207,11 +210,24 @@ export async function startApp() {
     const activeComparisons = state.comparisons.filter(
       (c) => activeSet.has(c.item_a_id) && activeSet.has(c.item_b_id)
     );
+    const sessionComparisons = state.comparisons.filter((c) => c.session_id === state.session.session_id);
+    const stepIndex = sessionComparisons.length;
+    const usedOpponentIds = new Set();
+    const targetId = state.session.target_item_id;
+    if (targetId) {
+      for (const c of sessionComparisons) {
+        if (c.item_a_id === targetId) usedOpponentIds.add(c.item_b_id);
+        if (c.item_b_id === targetId) usedOpponentIds.add(c.item_a_id);
+      }
+    }
     state.currentPair = pickPair({
       finishedIds: state.finishedIds,
       comparisons: activeComparisons,
       derivedById: state.derivedById,
-      targetId: state.session.target_item_id
+      mode: state.session.mode,
+      targetId: state.session.target_item_id,
+      stepIndex,
+      usedOpponentIds
     });
   }
 
@@ -344,11 +360,30 @@ export async function startApp() {
   }
 
   async function handleSetStatus(itemId, status) {
+    const prev = state.libraryByItemId.get(itemId);
     const entry = await idb.setLibraryStatus(itemId, status);
     state.libraryByItemId.set(itemId, entry);
     const idx = state.libraryEntries.findIndex((e) => e.item_id === itemId);
     if (idx >= 0) state.libraryEntries[idx] = entry;
     else state.libraryEntries.push(entry);
+
+    // When the user marks an item finished, show a temporary inline prompt to do 3 comparisons.
+    if (prev?.status !== "finished" && entry.status === "finished" && !entry.archived_at) {
+      state.finishPromptItemId = itemId;
+      const token = crypto.randomUUID();
+      state.finishPromptToken = token;
+      setTimeout(() => {
+        if (state.finishPromptToken === token && state.finishPromptItemId === itemId) {
+          state.finishPromptItemId = null;
+          state.finishPromptToken = null;
+          render();
+        }
+      }, 30_000);
+    }
+    if (state.finishPromptItemId === itemId && (entry.archived_at || entry.status !== "finished")) {
+      state.finishPromptItemId = null;
+      state.finishPromptToken = null;
+    }
 
     await recomputeAndPersist();
     render();
@@ -360,6 +395,10 @@ export async function startApp() {
     state.libraryByItemId.set(itemId, entry);
     const idx = state.libraryEntries.findIndex((e) => e.item_id === itemId);
     if (idx >= 0) state.libraryEntries[idx] = entry;
+    if (state.finishPromptItemId === itemId) {
+      state.finishPromptItemId = null;
+      state.finishPromptToken = null;
+    }
     await recomputeAndPersist();
     render();
     setToast("Removed from library.", { hint: "Comparisons kept." });
@@ -501,6 +540,10 @@ export async function startApp() {
     if (action === "start:focus") {
       const itemId = el.getAttribute("data-item-id");
       if (!itemId) return;
+      if (state.finishPromptItemId === itemId) {
+        state.finishPromptItemId = null;
+        state.finishPromptToken = null;
+      }
       return startSession({ stepsTotal: 3, mode: "after_finish", targetItemId: itemId });
     }
 
@@ -531,6 +574,13 @@ export async function startApp() {
       const itemId = state.detailItemId;
       if (!itemId) return;
       return void handleRestore(itemId).catch((e) => alert(String(e)));
+    }
+
+    if (action === "finishprompt:dismiss") {
+      state.finishPromptItemId = null;
+      state.finishPromptToken = null;
+      render();
+      return;
     }
 
     if (action === "quick:status") {
