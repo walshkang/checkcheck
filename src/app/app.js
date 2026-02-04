@@ -273,6 +273,9 @@ export async function startApp() {
   }
 
   async function handlePatchEntry(itemId, patch) {
+    if (typeof idb.patchLibraryEntry !== "function") {
+      throw new Error("App is out of date. Hard refresh and try again.");
+    }
     const entry = await idb.patchLibraryEntry(itemId, patch);
     state.libraryByItemId.set(itemId, entry);
     const idx = state.libraryEntries.findIndex((e) => e.item_id === itemId);

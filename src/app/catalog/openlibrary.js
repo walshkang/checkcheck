@@ -9,14 +9,17 @@ function toCoverUrl({ cover_i, isbn }, size = "S") {
   return null;
 }
 
-function normalizeRawSubjects(subjects) {
-  const raw = Array.isArray(subjects) ? subjects : typeof subjects === "string" ? [subjects] : [];
+function normalizeRawSubjectsFromDoc(d) {
+  const sources = [d?.subject, d?.subject_facet, d?.subject_key];
   const out = [];
-  for (const s of raw) {
-    const v = String(s || "").trim();
-    if (!v) continue;
-    out.push(v.length > 120 ? v.slice(0, 120) : v);
-    if (out.length >= 50) break;
+  for (const subjects of sources) {
+    const raw = Array.isArray(subjects) ? subjects : typeof subjects === "string" ? [subjects] : [];
+    for (const s of raw) {
+      const v = String(s || "").trim();
+      if (!v) continue;
+      out.push(v.length > 120 ? v.slice(0, 120) : v);
+      if (out.length >= 50) return out;
+    }
   }
   return out;
 }
@@ -31,7 +34,17 @@ export async function searchOpenLibrary(q, { limit = 10, langMode = "prefer_en" 
   if (langMode === "prefer_en") url.searchParams.set("lang", "en");
   url.searchParams.set(
     "fields",
-    ["key", "title", "author_name", "first_publish_year", "isbn", "cover_i", "subject"].join(",")
+    [
+      "key",
+      "title",
+      "author_name",
+      "first_publish_year",
+      "isbn",
+      "cover_i",
+      "subject",
+      "subject_facet",
+      "subject_key"
+    ].join(",")
   );
 
   const res = await fetch(url.toString());
@@ -50,7 +63,7 @@ export async function searchOpenLibrary(q, { limit = 10, langMode = "prefer_en" 
         typeof d.first_publish_year === "number" ? d.first_publish_year : d.first_publish_year ?? null,
       isbn,
       cover_url: toCoverUrl({ cover_i: d.cover_i, isbn }),
-      raw_subjects: normalizeRawSubjects(d.subject)
+      raw_subjects: normalizeRawSubjectsFromDoc(d)
     };
   });
 }

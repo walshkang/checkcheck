@@ -20,7 +20,11 @@ const SUBJECT_TO_TYPE = [
 ];
 
 function normalizeSubject(s) {
-  return String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
+  return String(s || "")
+    .trim()
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
 }
 
 export function mapSubjectsToTypeSuggested(rawSubjects) {
@@ -33,4 +37,3 @@ export function mapSubjectsToTypeSuggested(rawSubjects) {
   }
   return null;
 }
-
