@@ -44,7 +44,8 @@
     "supporting": [
       "docs/PAIR_SELECTION.md",
       "docs/INSTRUMENTATION.md",
-      "docs/COPY_TONE.md"
+      "docs/COPY_TONE.md",
+      "docs/BOOK_SEARCH_MVP.md"
     ]
   },
   "roadmap": {
