@@ -275,34 +275,28 @@ input {
 
 .stars {
   --stars-size: 13px;
-  --stars-fill: 0%;
-  position: relative;
-  display: inline-block;
-  font-family: var(--mono);
-  font-size: var(--stars-size);
-  line-height: 1;
-  letter-spacing: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   white-space: nowrap;
   user-select: none;
-  height: 1em;
 }
 
-.stars::before {
-  content: "★★★★★";
-  display: inline-block;
-  color: rgba(0, 0, 0, 0.22);
+.starSvg {
+  width: var(--stars-size);
+  height: var(--stars-size);
+  display: block;
 }
 
-.stars::after {
-  content: "★★★★★";
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: var(--stars-fill);
-  overflow: hidden;
-  display: inline-block;
-  white-space: nowrap;
-  color: var(--ink);
+.starOutline {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.starFill {
+  fill: var(--ink);
 }
 
 .chip {

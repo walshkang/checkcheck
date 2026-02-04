@@ -133,7 +133,8 @@ Bootstrap:
 
 Early stage rule (compsCount < MIN_COMPS_FOR_STABLE):
 - allow upward moves immediately (delight)
-- resist downward moves (noise protection)
+- resist small downward moves (noise protection)
+- allow large downward corrections (avoid obviously-wrong stars early)
 
 Stable rule:
 - If candidate > currentDisplay:

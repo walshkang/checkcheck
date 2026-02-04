@@ -9,17 +9,43 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+let nextStarClipId = 0;
+function allocStarClipId() {
+  nextStarClipId += 1;
+  return `starclip-${nextStarClipId}`;
+}
+
 function renderStars(starsDisplay, { sizePx = null, step = 0.25 } = {}) {
   if (starsDisplay == null) return "";
   const clamped = Math.max(0, Math.min(5, Number(starsDisplay)));
   const q = Math.max(0, Math.min(5, Math.round(clamped / step) * step));
-  const pct = (q / 5) * 100;
   const label = `${q % 1 === 0 ? String(q) : q.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")} out of 5 stars`;
   const size = sizePx != null ? `--stars-size:${Number(sizePx)}px;` : "";
-  const fill = `--stars-fill:${pct.toFixed(2)}%;`;
-  const style = ` style="${escapeHtml(`${size}${fill}`)}"`;
+  const style = size ? ` style="${escapeHtml(size)}"` : "";
+  const fills = Array.from({ length: 5 }, (_, i) => Math.max(0, Math.min(1, q - i)));
+  const starPath =
+    "M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z";
+  const stars = fills
+    .map((f) => {
+      const clipId = allocStarClipId();
+      const w = (24 * f).toFixed(2);
+      return `
+        <svg class="starSvg" viewBox="0 0 24 24" aria-hidden="true">
+          <defs>
+            <clipPath id="${clipId}">
+              <rect x="0" y="0" width="${w}" height="24"></rect>
+            </clipPath>
+          </defs>
+          <path class="starOutline" d="${starPath}"></path>
+          <g clip-path="url(#${clipId})">
+            <path class="starFill" d="${starPath}"></path>
+          </g>
+        </svg>
+      `;
+    })
+    .join("");
   return `
-    <span class="stars" role="img" aria-label="${escapeHtml(label)}"${style}></span>
+    <span class="stars" role="img" aria-label="${escapeHtml(label)}"${style}>${stars}</span>
   `;
 }
 

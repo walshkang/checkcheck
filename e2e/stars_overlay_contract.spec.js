@@ -29,54 +29,28 @@ test("Stars widget uses overlay contract (no double stars)", async ({ page }) =>
 
   const info = await star.evaluate((el) => {
     const s = getComputedStyle(el);
-    const before = getComputedStyle(el, "::before");
-    const after = getComputedStyle(el, "::after");
     const rect = el.getBoundingClientRect();
-    const probe = document.createElement("span");
-    probe.textContent = "★★★★★";
-    probe.style.position = "absolute";
-    probe.style.left = "-99999px";
-    probe.style.top = "-99999px";
-    probe.style.fontFamily = s.fontFamily;
-    probe.style.fontSize = s.fontSize;
-    probe.style.letterSpacing = s.letterSpacing;
-    probe.style.whiteSpace = "nowrap";
-    document.body.appendChild(probe);
-    const probeRect = probe.getBoundingClientRect();
-    probe.remove();
+    const svgs = Array.from(el.querySelectorAll("svg.starSvg"));
+    const clips = svgs.map((svg) => {
+      const cp = svg.querySelector("clipPath rect");
+      return cp ? cp.getAttribute("width") : null;
+    });
     return {
-      text: (el.textContent || "").trim(),
-      position: s.position,
       display: s.display,
       rect: { w: rect.width, h: rect.height },
-      probe: { w: probeRect.width, h: probeRect.height },
-      before: { content: before.content, display: before.display, color: before.color },
-      after: {
-        content: after.content,
-        position: after.position,
-        overflow: after.overflow,
-        width: after.width,
-        left: after.left,
-        top: after.top
-      },
-      fill: s.getPropertyValue("--stars-fill").trim()
+      font: { family: s.fontFamily, size: s.fontSize, lineHeight: s.lineHeight },
+      svgCount: svgs.length,
+      clips
     };
   });
 
-  expect(info.text).toBe("");
-  expect(info.position).toBe("relative");
-  expect(["inline-block", "block", "inline"].includes(info.display)).toBe(true);
-  expect(info.before.content).toContain("★★★★★");
-  expect(info.after.content).toContain("★★★★★");
-  expect(info.after.position).toBe("absolute");
-  expect(info.after.overflow).toBe("hidden");
-
-  // Container should shrink-wrap to the intrinsic width of "★★★★★" in the current font/size.
-  expect(Math.abs(info.rect.w - info.probe.w)).toBeLessThan(2);
-
-  const afterWidth = Number.parseFloat(String(info.after.width).replace("px", ""));
-  expect(Number.isFinite(afterWidth)).toBe(true);
-  expect(afterWidth).toBeGreaterThan(0);
-  expect(afterWidth).toBeLessThanOrEqual(info.rect.w + 1);
-  expect(info.fill.endsWith("%")).toBe(true);
+  expect(info.svgCount).toBe(5);
+  expect(["inline-flex", "flex"].includes(info.display)).toBe(true);
+  // Each clip rect width should be numeric in [0,24].
+  for (const w of info.clips) {
+    const n = Number(w);
+    expect(Number.isFinite(n)).toBe(true);
+    expect(n).toBeGreaterThanOrEqual(0);
+    expect(n).toBeLessThanOrEqual(24);
+  }
 });

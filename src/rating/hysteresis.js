@@ -35,7 +35,13 @@ export function updateStarsDisplay(
 
   if (compsCount < minCompsForStable) {
     // Early stage delight: upward moves immediately; resist downward noise.
-    return candidate > currentDisplay ? candidate : currentDisplay;
+    //
+    // However, allow *large* downward corrections so we don't show obviously-wrong
+    // stars alongside the continuous score while the system is still calibrating.
+    if (candidate > currentDisplay) return candidate;
+    const drop = currentDisplay - candidate;
+    if (drop >= 0.5) return candidate;
+    return currentDisplay;
   }
 
   if (candidate > currentDisplay) {
