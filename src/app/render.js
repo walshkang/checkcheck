@@ -1,4 +1,4 @@
-import { formatStars, formatTopPct } from "./ui_format.js";
+import { formatTopPct } from "./ui_format.js";
 
 function escapeHtml(s) {
   return String(s)
@@ -7,6 +7,21 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function renderStars(starsDisplay, { sizePx = null, step = 0.25 } = {}) {
+  if (starsDisplay == null) return "";
+  const clamped = Math.max(0, Math.min(5, Number(starsDisplay)));
+  const q = Math.max(0, Math.min(5, Math.round(clamped / step) * step));
+  const pct = (q / 5) * 100;
+  const label = `${q % 1 === 0 ? String(q) : q.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")} out of 5 stars`;
+  const size = sizePx != null ? ` style="--stars-size:${Number(sizePx)}px;"` : "";
+  return `
+    <span class="stars" role="img" aria-label="${escapeHtml(label)}"${size}>
+      <span class="starsBg" aria-hidden="true">★★★★★</span>
+      <span class="starsFg" aria-hidden="true" style="width:${pct.toFixed(2)}%;">★★★★★</span>
+    </span>
+  `;
 }
 
 function itemLine(item) {
@@ -114,16 +129,16 @@ function renderLibrary(state) {
   });
 
   const listItems = listRows
-    .map((row) => {
-      const { item, entry, derived, rank } = row;
-      const isArchived = !!entry.archived_at;
-      const isFinishedActive = entry.status === "finished" && !isArchived;
-      const isRated = !!derived && derived.stars_display != null;
-      const stars = isRated ? formatStars(derived.stars_display) : "";
-      const scoredCount = state.scoredIds?.length ?? 0;
-      const sub = isArchived
-        ? "Archived — restore to compare."
-        : isFinishedActive
+	    .map((row) => {
+	      const { item, entry, derived, rank } = row;
+	      const isArchived = !!entry.archived_at;
+	      const isFinishedActive = entry.status === "finished" && !isArchived;
+	      const isRated = !!derived && derived.stars_display != null;
+	      const stars = isRated ? renderStars(derived.stars_display) : "";
+	      const scoredCount = state.scoredIds?.length ?? 0;
+	      const sub = isArchived
+	        ? "Archived — restore to compare."
+	        : isFinishedActive
           ? isRated
             ? `${derived.rank_score_raw.toFixed(2)} / 5.00 · Rank #${rank} of ${scoredCount} · ${formatTopPct(derived.percentile)} · Based on ${derived.comparisons_count} comparisons`
             : "Not rated yet — do a mic check."
@@ -145,15 +160,15 @@ function renderLibrary(state) {
         <li class="list-item" data-kind="library-item" data-action="open:detail" data-item-id="${escapeHtml(item.id)}">
 	            <div class="row">
 	            <div class="stack" style="gap:4px;">
-	              <div class="title">${itemLine(item)}</div>
-	              <div class="sub">${escapeHtml(sub)}</div>
-	            </div>
-	            <div class="stack" style="align-items:flex-end; gap:8px;">
-	              ${stars ? `<div class="stars">${stars}</div>` : ""}
-	              ${
-	                isArchived
-	                  ? `<span class="chip">Archived</span>${statusChip(entry.status)}`
-	                  : state.libraryView === "finished" && entry.status === "finished"
+		              <div class="title">${itemLine(item)}</div>
+		              <div class="sub">${escapeHtml(sub)}</div>
+		            </div>
+		            <div class="stack" style="align-items:flex-end; gap:8px;">
+		              ${stars || ""}
+		              ${
+		                isArchived
+		                  ? `<span class="chip">Archived</span>${statusChip(entry.status)}`
+		                  : state.libraryView === "finished" && entry.status === "finished"
 	                    ? `${statusChip(entry.status)}`
 	                    : `${statusChipButton(item.id, entry.status)}`
 	              }
@@ -336,12 +351,13 @@ function renderCompare(state) {
   const derivedA = state.derivedById.get(pair.a);
   const derivedB = state.derivedById.get(pair.b);
 
-  const starsA = derivedA ? formatStars(derivedA.stars_display) : "";
-  const starsB = derivedB ? formatStars(derivedB.stars_display) : "";
+  const showStars = !(session.mode === "mic_check" && session.is_initial);
+  const starsA = showStars ? renderStars(derivedA?.stars_display ?? null) : "";
+  const starsB = showStars ? renderStars(derivedB?.stars_display ?? null) : "";
 
   return `
-    <div class="card">
-      <div class="row">
+	    <div class="card">
+	      <div class="row">
         <div class="stack" style="gap:4px;">
           <div class="kicker">Mic check</div>
           <div class="muted">Which did you like more?</div>
@@ -349,20 +365,20 @@ function renderCompare(state) {
         <div class="chip">${stepsDone + 1} / ${stepsTotal}</div>
       </div>
       <div style="height:12px;"></div>
-      <div class="compareCards">
-        <div class="compareCard">
-          <div class="title">${itemLine(itemA)}</div>
-          <div class="sub">Relative to your library.</div>
-          ${starsA ? `<div style="height:10px;"></div><div class="stars">${starsA}</div>` : ""}
-        </div>
-        <div class="compareCard">
-          <div class="title">${itemLine(itemB)}</div>
-          <div class="sub">Relative to your library.</div>
-          ${starsB ? `<div style="height:10px;"></div><div class="stars">${starsB}</div>` : ""}
-        </div>
-      </div>
-      <div style="height:12px;"></div>
-      <div class="btns">
+	        <div class="compareCards">
+	          <div class="compareCard">
+	            <div class="title">${itemLine(itemA)}</div>
+	            <div class="sub">Relative to your library.</div>
+	          ${starsA ? `<div style="height:10px;"></div>${starsA}` : ""}
+	          </div>
+	          <div class="compareCard">
+	            <div class="title">${itemLine(itemB)}</div>
+	            <div class="sub">Relative to your library.</div>
+	          ${starsB ? `<div style="height:10px;"></div>${starsB}` : ""}
+	          </div>
+	        </div>
+	      <div style="height:12px;"></div>
+	      <div class="btns">
         <button class="btn primary" data-action="compare:win" data-winner="a">A wins</button>
         <button class="btn primary" data-action="compare:win" data-winner="b">B wins</button>
         <button class="btn" data-action="compare:skip">Skip</button>
@@ -380,13 +396,14 @@ function renderDetail(state) {
 
   const derived = state.derivedById.get(itemId);
   const isFinished = entry.status === "finished";
-  const isArchived = !!entry.archived_at;
-  const isActiveFinished = isFinished && !isArchived;
-  const isRated = !!derived && derived.stars_display != null;
+	  const isArchived = !!entry.archived_at;
+	  const isActiveFinished = isFinished && !isArchived;
+	  const isRated = !!derived && derived.stars_display != null;
+	  const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
 
-  const stars = isRated ? formatStars(derived.stars_display) : "";
-  const rank = isRated ? state.rankById.get(itemId) : null;
-  const scoredCount = state.scoredIds?.length ?? 0;
+	  const stars = isRated ? renderStars(derived.stars_display, { sizePx: 16 }) : "";
+	  const rank = isRated ? state.rankById.get(itemId) : null;
+	  const scoredCount = state.scoredIds?.length ?? 0;
 
   const stacked = isArchived
     ? "Archived."
@@ -406,15 +423,15 @@ function renderDetail(state) {
         </div>
         <button class="btn" data-action="nav:library">Back</button>
       </div>
-      <div style="height:12px;"></div>
-      ${
-        stars
-          ? `<div class="row">
-              <div class="stars" style="font-size:16px;">${stars}</div>
-              <div class="chip">${escapeHtml(stacked)}</div>
-            </div>`
-          : `<div class="chip">${escapeHtml(stacked)}</div>`
-      }
+	      <div style="height:12px;"></div>
+	      ${
+	        stars
+	          ? `<div class="row">
+	              ${stars}
+	              <div class="chip">${escapeHtml(stacked)}</div>
+	            </div>`
+	          : `<div class="chip">${escapeHtml(stacked)}</div>`
+	      }
       ${
         isFinished && !isRated
           ? `<div style="height:10px;"></div><div class="chip">Not rated • Based on ${derived?.comparisons_count ?? 0} comparisons</div>`
@@ -435,12 +452,12 @@ function renderDetail(state) {
           isArchived
             ? `<button class="btn primary" data-action="item:restore">Restore</button>`
             : `<button class="btn danger" data-action="item:archive">Remove from library</button>`
-        }
-        <button class="btn primary" data-action="start:focus" data-item-id="${escapeHtml(itemId)}" ${
-          isActiveFinished && state.finishedIds.length >= 2 ? "" : "disabled"
-        }>Do 3 more comparisons</button>
-        <button class="btn" data-action="nav:compare">Mic check</button>
-      </div>
-    </div>
-  `;
+	        }
+	        <button class="btn primary" data-action="start:focus" data-item-id="${escapeHtml(itemId)}" ${
+	          isActiveFinished && decidedComparisonsCount > 0 ? "" : "disabled"
+	        }>Do 3 more comparisons</button>
+	        <button class="btn" data-action="nav:compare">Mic check</button>
+	      </div>
+	    </div>
+	  `;
 }

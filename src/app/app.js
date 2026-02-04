@@ -426,17 +426,19 @@ export async function startApp() {
     setToast("Restored.", { hint: "Relative to your library." });
   }
 
-  function startSession({ stepsTotal, mode, targetItemId = null }) {
-    state.session = {
-      session_id: crypto.randomUUID(),
-      mode,
-      steps_total: stepsTotal,
-      target_item_id: targetItemId,
-      started_at: nowIso()
-    };
-    setSurface("compare");
-    render();
-  }
+	  function startSession({ stepsTotal, mode, targetItemId = null }) {
+	    const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
+	    state.session = {
+	      session_id: crypto.randomUUID(),
+	      mode,
+	      is_initial: mode === "mic_check" && decidedComparisonsCount === 0,
+	      steps_total: stepsTotal,
+	      target_item_id: targetItemId,
+	      started_at: nowIso()
+	    };
+	    setSurface("compare");
+	    render();
+	  }
 
   async function handleCompare({ winner }) {
     if (!state.session || !state.currentPair) return;
