@@ -60,17 +60,56 @@ export async function loadAll() {
       reqToPromise(s[STORES.comparisons].getAll()),
       reqToPromise(s[STORES.uiState].getAll())
     ]);
-    return { items, libraryEntries, comparisons, uiState };
+    return {
+      items: items.map(normalizeItem),
+      libraryEntries: libraryEntries.map(normalizeLibraryEntry),
+      comparisons,
+      uiState
+    };
   });
 }
 
-export async function addItem({ title, author, source = null, isbn = null, cover_url = null, first_publish_year = null }) {
+function normalizeItem(it) {
+  const rawSubjects = Array.isArray(it?.raw_subjects) ? it.raw_subjects : [];
+  return { ...it, raw_subjects: rawSubjects };
+}
+
+function normalizeLibraryEntry(e) {
+  const tagsRaw = Array.isArray(e?.tags) ? e.tags : [];
+  const tags = tagsRaw
+    .map((t) => String(t || "").trim())
+    .filter(Boolean);
+
+  const typeSuggested = typeof e?.type_suggested === "string" ? e.type_suggested.trim() : "";
+  const typeConfirmed = typeof e?.type_confirmed === "string" ? e.type_confirmed.trim() : "";
+  const decision = e?.type_decision === "confirmed" || e?.type_decision === "cleared" ? e.type_decision : null;
+
+  return {
+    ...e,
+    type_suggested: typeSuggested ? typeSuggested : null,
+    type_confirmed: typeConfirmed ? typeConfirmed : null,
+    type_decision: decision,
+    tags
+  };
+}
+
+export async function addItem({
+  title,
+  author,
+  source = null,
+  isbn = null,
+  cover_url = null,
+  first_publish_year = null,
+  raw_subjects = null,
+  type_suggested = null
+}) {
   const now = new Date().toISOString();
   const meta = {
     source: source ?? null,
     isbn: isbn ?? null,
     cover_url: cover_url ?? null,
-    first_publish_year: first_publish_year ?? null
+    first_publish_year: first_publish_year ?? null,
+    raw_subjects: Array.isArray(raw_subjects) ? raw_subjects : []
   };
   const item = {
     ...meta,
@@ -83,6 +122,10 @@ export async function addItem({ title, author, source = null, isbn = null, cover
     item_id: item.id,
     status: "want",
     finished_at: null,
+    type_suggested: typeof type_suggested === "string" && type_suggested.trim() ? type_suggested.trim() : null,
+    type_confirmed: null,
+    type_decision: null,
+    tags: [],
     created_at: now,
     updated_at: now
   };

@@ -4,6 +4,7 @@ import * as idb from "../storage/idb.js";
 import { pickPair } from "./pairs.js";
 import { renderApp } from "./render.js";
 import { searchOpenLibrary } from "./catalog/openlibrary.js";
+import { mapSubjectsToTypeSuggested } from "./catalog/type_mapping.js";
 
 function byId(arr) {
   const m = new Map();
@@ -355,7 +356,9 @@ export async function startApp() {
       source: r.source ?? null,
       isbn: r.isbn ?? null,
       cover_url: r.cover_url ?? null,
-      first_publish_year: r.first_publish_year ?? null
+      first_publish_year: r.first_publish_year ?? null,
+      raw_subjects: r.raw_subjects ?? [],
+      type_suggested: mapSubjectsToTypeSuggested(r.raw_subjects)
     });
 
     state.items.push(item);

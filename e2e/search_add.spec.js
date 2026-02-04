@@ -11,6 +11,7 @@ test.beforeEach(async ({ page }) => {
     const q = u.searchParams.get("q") || "";
     // Default search behavior is "Prefer English".
     expect(u.searchParams.get("lang")).toBe("en");
+    expect(u.searchParams.get("fields") || "").toContain("subject");
     const payload = {
       docs: [
         {
@@ -19,7 +20,8 @@ test.beforeEach(async ({ page }) => {
           author_name: ["Some Author"],
           first_publish_year: 2001,
           isbn: ["9780000000000"],
-          cover_i: 12345
+          cover_i: 12345,
+          subject: ["Science fiction", "Novel", "20th century"]
         }
       ]
     };
@@ -70,6 +72,17 @@ test("Search (flagged) -> add -> export contains optional fields -> wipe -> impo
   expect(item1).toHaveProperty("cover_url");
   expect(String(item1.cover_url)).toContain("covers.openlibrary.org");
   expect(item1).toHaveProperty("first_publish_year", 2001);
+  expect(item1).toHaveProperty("raw_subjects");
+  expect(Array.isArray(item1.raw_subjects)).toBeTruthy();
+  expect(item1.raw_subjects).toEqual(expect.arrayContaining(["Science fiction", "Novel", "20th century"]));
+
+  const entry1 = obj1?.data?.library_entries?.find((e) => e.item_id === item1.id);
+  expect(entry1).toBeTruthy();
+  expect(entry1).toHaveProperty("type_suggested", "Fiction");
+  expect(entry1).toHaveProperty("type_confirmed", null);
+  expect(entry1).toHaveProperty("type_decision", null);
+  expect(entry1).toHaveProperty("tags");
+  expect(entry1.tags).toEqual([]);
 
   // Wipe and import.
   await page.locator('[data-action="dev:wipeAll"]').click();
@@ -95,4 +108,14 @@ test("Search (flagged) -> add -> export contains optional fields -> wipe -> impo
   expect(item2).toHaveProperty("isbn", "9780000000000");
   expect(item2).toHaveProperty("cover_url");
   expect(item2).toHaveProperty("first_publish_year", 2001);
+  expect(item2).toHaveProperty("raw_subjects");
+  expect(Array.isArray(item2.raw_subjects)).toBeTruthy();
+
+  const entry2 = obj2?.data?.library_entries?.find((e) => e.item_id === item2.id);
+  expect(entry2).toBeTruthy();
+  expect(entry2).toHaveProperty("type_suggested", "Fiction");
+  expect(entry2).toHaveProperty("type_confirmed", null);
+  expect(entry2).toHaveProperty("type_decision", null);
+  expect(entry2).toHaveProperty("tags");
+  expect(entry2.tags).toEqual([]);
 });

@@ -9,6 +9,18 @@ function toCoverUrl({ cover_i, isbn }, size = "S") {
   return null;
 }
 
+function normalizeRawSubjects(subjects) {
+  const raw = Array.isArray(subjects) ? subjects : typeof subjects === "string" ? [subjects] : [];
+  const out = [];
+  for (const s of raw) {
+    const v = String(s || "").trim();
+    if (!v) continue;
+    out.push(v.length > 120 ? v.slice(0, 120) : v);
+    if (out.length >= 50) break;
+  }
+  return out;
+}
+
 export async function searchOpenLibrary(q, { limit = 10, langMode = "prefer_en" } = {}) {
   const query = String(q || "").trim();
   if (!query) return [];
@@ -19,7 +31,7 @@ export async function searchOpenLibrary(q, { limit = 10, langMode = "prefer_en" 
   if (langMode === "prefer_en") url.searchParams.set("lang", "en");
   url.searchParams.set(
     "fields",
-    ["key", "title", "author_name", "first_publish_year", "isbn", "cover_i"].join(",")
+    ["key", "title", "author_name", "first_publish_year", "isbn", "cover_i", "subject"].join(",")
   );
 
   const res = await fetch(url.toString());
@@ -37,7 +49,8 @@ export async function searchOpenLibrary(q, { limit = 10, langMode = "prefer_en" 
       first_publish_year:
         typeof d.first_publish_year === "number" ? d.first_publish_year : d.first_publish_year ?? null,
       isbn,
-      cover_url: toCoverUrl({ cover_i: d.cover_i, isbn })
+      cover_url: toCoverUrl({ cover_i: d.cover_i, isbn }),
+      raw_subjects: normalizeRawSubjects(d.subject)
     };
   });
 }
