@@ -5,6 +5,7 @@ import {
   gotoApp,
   wipeAll,
   addBook,
+  setLibraryView,
   setRowFinished,
   startMicCheck,
   winA
@@ -19,8 +20,14 @@ test.beforeEach(async ({ page }) => {
 test("Export -> wipe -> import restores library and comparisons", async ({ page }, testInfo) => {
   await addBook(page, { title: "Exported", author: "Author X" });
   await addBook(page, { title: "Imported", author: "Author Y" });
+  await addBook(page, { title: "Third", author: "Author Z" });
+  await addBook(page, { title: "Fourth", author: "Author W" });
+  await addBook(page, { title: "Fifth", author: "Author V" });
   await setRowFinished(page, "Exported", true);
   await setRowFinished(page, "Imported", true);
+  await setRowFinished(page, "Third", true);
+  await setRowFinished(page, "Fourth", true);
+  await setRowFinished(page, "Fifth", true);
 
   await startMicCheck(page);
   await winA(page);
@@ -55,6 +62,7 @@ test("Export -> wipe -> import restores library and comparisons", async ({ page 
   await chooser.setFiles(outPath);
 
   // After import, both items should be visible again.
+  await setLibraryView(page, "finished");
   await expect(page.locator('.list-item[data-kind="library-item"]', { hasText: "Exported" })).toBeVisible();
   await expect(page.locator('.list-item[data-kind="library-item"]', { hasText: "Imported" })).toBeVisible();
 

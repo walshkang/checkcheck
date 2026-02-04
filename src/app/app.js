@@ -55,12 +55,13 @@ export async function startApp() {
     detailItemId: null,
     session: null,
     currentPair: null,
-    toast: null,
+	    toast: null,
 
-    showArchived: false,
+	    showArchived: false,
+	    libraryView: "want", // want | finished
 
-    finishPromptItemId: null,
-    finishPromptToken: null,
+	    finishPromptItemId: null,
+	    finishPromptToken: null,
 
     searchEnabled,
     searchLangMode: "prefer_en", // prefer_en | any
@@ -249,21 +250,27 @@ export async function startApp() {
     render();
   }
 
-  async function handleAddItem(form) {
-    const fd = new FormData(form);
-    const title = String(fd.get("title") || "").trim();
-    const author = String(fd.get("author") || "").trim();
-    if (!title) return;
+	  async function handleAddItem(form) {
+	    const fd = new FormData(form);
+	    const title = String(fd.get("title") || "").trim();
+	    const author = String(fd.get("author") || "").trim();
+	    const alreadyFinished = fd.get("already_finished") != null;
+	    if (!title) return;
 
-    const { item, entry } = await idb.addItem({ title, author });
-    state.items.push(item);
-    state.itemsById.set(item.id, item);
-    state.libraryEntries.push(entry);
-    state.libraryByItemId.set(item.id, entry);
+	    const { item, entry } = await idb.addItem({ title, author });
+	    state.items.push(item);
+	    state.itemsById.set(item.id, item);
+	    state.libraryEntries.push(entry);
+	    state.libraryByItemId.set(item.id, entry);
 
-    form.reset();
-    render();
-  }
+	    form.reset();
+	    if (alreadyFinished) {
+	      state.libraryView = "finished";
+	      await handleSetStatus(item.id, "finished");
+	      return;
+	    }
+	    render();
+	  }
 
   async function handleSearchOpenLibrary(form) {
     if (!state.searchEnabled) return;
@@ -359,19 +366,23 @@ export async function startApp() {
     setToast("Added.", { hint: "Ratings are relative to your library." });
   }
 
-  async function handleSetStatus(itemId, status) {
-    const prev = state.libraryByItemId.get(itemId);
-    const entry = await idb.setLibraryStatus(itemId, status);
-    state.libraryByItemId.set(itemId, entry);
-    const idx = state.libraryEntries.findIndex((e) => e.item_id === itemId);
-    if (idx >= 0) state.libraryEntries[idx] = entry;
-    else state.libraryEntries.push(entry);
+	  async function handleSetStatus(itemId, status) {
+	    const prev = state.libraryByItemId.get(itemId);
+	    const entry = await idb.setLibraryStatus(itemId, status);
+	    state.libraryByItemId.set(itemId, entry);
+	    const idx = state.libraryEntries.findIndex((e) => e.item_id === itemId);
+	    if (idx >= 0) state.libraryEntries[idx] = entry;
+	    else state.libraryEntries.push(entry);
 
-    // When the user marks an item finished, show a temporary inline prompt to do 3 comparisons.
-    if (prev?.status !== "finished" && entry.status === "finished" && !entry.archived_at) {
-      state.finishPromptItemId = itemId;
-      const token = crypto.randomUUID();
-      state.finishPromptToken = token;
+	    const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
+	    if (entry.status === "finished" && !entry.archived_at && decidedComparisonsCount > 0) state.libraryView = "finished";
+	    if (entry.status === "want" || entry.status === "reading") state.libraryView = "want";
+
+	    // When the user marks an item finished, show a temporary inline prompt to do 3 comparisons.
+	    if (prev?.status !== "finished" && entry.status === "finished" && !entry.archived_at) {
+	      state.finishPromptItemId = itemId;
+	      const token = crypto.randomUUID();
+	      state.finishPromptToken = token;
       setTimeout(() => {
         if (state.finishPromptToken === token && state.finishPromptItemId === itemId) {
           state.finishPromptItemId = null;
@@ -502,20 +513,28 @@ export async function startApp() {
     }
   });
 
-  root.addEventListener("click", (ev) => {
-    const el = ev.target instanceof Element ? ev.target.closest("[data-action]") : null;
-    if (!el) return;
-    const action = el.getAttribute("data-action");
-    if (!action) return;
+	  root.addEventListener("click", (ev) => {
+	    const el = ev.target instanceof Element ? ev.target.closest("[data-action]") : null;
+	    if (!el) return;
+	    const action = el.getAttribute("data-action");
+	    if (!action) return;
 
-    if (action === "nav:library") return setSurface("library"), render();
-    if (action === "nav:compare") return setSurface("compare"), render();
-    if (action === "export") return void handleExport().catch((e) => alert(String(e)));
+	    if (action === "nav:library") return setSurface("library"), render();
+	    if (action === "nav:compare") return setSurface("compare"), render();
+	    if (action === "export") return void handleExport().catch((e) => alert(String(e)));
 
-    if (action === "import:open") {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "application/json";
+	    if (action === "library:view") {
+	      const view = el.getAttribute("data-view");
+	      if (view !== "want" && view !== "finished") return;
+	      state.libraryView = view;
+	      render();
+	      return;
+	    }
+
+	    if (action === "import:open") {
+	      const input = document.createElement("input");
+	      input.type = "file";
+	      input.accept = "application/json";
       input.onchange = () => {
         const file = input.files?.[0];
         if (file) handleImport(file).catch((e) => alert(String(e)));
@@ -527,24 +546,41 @@ export async function startApp() {
     if (action === "dev:resetDerived") return void handleResetDerived();
     if (action === "dev:wipeAll") return void handleWipeAll().catch((e) => alert(String(e)));
 
-    if (action === "toggle:archived") {
-      state.showArchived = !state.showArchived;
-      render();
-      return;
-    }
+	    if (action === "toggle:archived") {
+	      state.showArchived = !state.showArchived;
+	      render();
+	      return;
+	    }
 
-    if (action === "start:miccheck") return startSession({ stepsTotal: 10, mode: "mic_check" });
-    if (action === "start:more") {
-      const steps = Number(el.getAttribute("data-steps") || "5");
-      return startSession({ stepsTotal: Number.isFinite(steps) ? steps : 5, mode: "mic_check" });
-    }
+	    const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
+	    const canStartCompare = state.finishedIds.length >= 5;
 
-    if (action === "start:focus") {
-      const itemId = el.getAttribute("data-item-id");
-      if (!itemId) return;
-      if (state.finishPromptItemId === itemId) {
-        state.finishPromptItemId = null;
-        state.finishPromptToken = null;
+	    if (action === "start:miccheck") {
+	      if (!canStartCompare) {
+	        setToast("Add at least 5 finished books to begin.", { hint: "Finish a few books, then we’ll calibrate your shelf." });
+	        return;
+	      }
+	      return startSession({ stepsTotal: 10, mode: "mic_check" });
+	    }
+	    if (action === "start:more") {
+	      if (!canStartCompare) {
+	        setToast("Add at least 5 finished books to begin.", { hint: "Finish a few books, then we’ll calibrate your shelf." });
+	        return;
+	      }
+	      const steps = Number(el.getAttribute("data-steps") || "5");
+	      return startSession({ stepsTotal: Number.isFinite(steps) ? steps : 5, mode: "mic_check" });
+	    }
+
+	    if (action === "start:focus") {
+	      if (decidedComparisonsCount === 0) {
+	        setToast("Do a mic check first.", { hint: "Your shelf calibrates from comparisons." });
+	        return;
+	      }
+	      const itemId = el.getAttribute("data-item-id");
+	      if (!itemId) return;
+	      if (state.finishPromptItemId === itemId) {
+	        state.finishPromptItemId = null;
+	        state.finishPromptToken = null;
       }
       return startSession({ stepsTotal: 3, mode: "after_finish", targetItemId: itemId });
     }

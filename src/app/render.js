@@ -89,15 +89,15 @@ function renderFooter(state) {
 }
 
 function renderLibrary(state) {
-  const canCompare = state.finishedIds.length >= 2;
   const empty = state.items.length === 0;
   const addLabel = empty ? "Add your first book" : "Add book";
   const searchPanel = renderSearchPanel(state);
   const archivedCount = state.archivedIds?.length ?? 0;
-  const showOnboardingMicCheck = state.comparisons.length === 0 && canCompare;
-  const onboardingMicCheck = showOnboardingMicCheck
+  const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
+  const showInitiationBanner = state.libraryView === "finished" && state.finishedIds.length >= 5 && decidedComparisonsCount === 0;
+  const initiationBanner = showInitiationBanner
     ? `
-        <div class="banner" data-kind="onboarding-miccheck">
+        <div class="banner" data-kind="initiation-miccheck">
           <div class="title">Ready for a mic check?</div>
           <div class="sub">Ten quick picks. Your shelf will snap into place.</div>
           <div style="height:10px;"></div>
@@ -107,7 +107,13 @@ function renderLibrary(state) {
       `
     : "";
 
-  const listItems = state.libraryRows
+  const listRows = state.libraryRows.filter((row) => {
+    if (row.entry.archived_at) return true;
+    if (state.libraryView === "finished") return row.entry.status === "finished";
+    return row.entry.status === "want" || row.entry.status === "reading";
+  });
+
+  const listItems = listRows
     .map((row) => {
       const { item, entry, derived, rank } = row;
       const isArchived = !!entry.archived_at;
@@ -123,7 +129,7 @@ function renderLibrary(state) {
             : "Not rated yet — do a mic check."
           : "Add a few finished books, then we’ll do a quick mic check to rank them.";
       const showFinishPrompt =
-        state.finishPromptItemId === item.id && isFinishedActive && state.finishedIds.length >= 2;
+        state.finishPromptItemId === item.id && isFinishedActive && decidedComparisonsCount > 0;
       const finishPrompt = showFinishPrompt
         ? `
             <div class="inlinePrompt">
@@ -137,61 +143,77 @@ function renderLibrary(state) {
         : "";
       return `
         <li class="list-item" data-kind="library-item" data-action="open:detail" data-item-id="${escapeHtml(item.id)}">
-          <div class="row">
-            <div class="stack" style="gap:4px;">
-              <div class="title">${itemLine(item)}</div>
-              <div class="sub">${escapeHtml(sub)}</div>
-            </div>
-            <div class="stack" style="align-items:flex-end; gap:8px;">
-              ${stars ? `<div class="stars">${stars}</div>` : ""}
-              ${
-                isArchived
-                  ? `<span class="chip">Archived</span>${statusChip(entry.status)}`
-                  : `${statusChipButton(item.id, entry.status)}`
-              }
-              ${isFinishedActive && !isRated ? `<span class="chip">Not rated</span>` : ""}
-            </div>
-          </div>
-          ${finishPrompt}
-        </li>
+	            <div class="row">
+	            <div class="stack" style="gap:4px;">
+	              <div class="title">${itemLine(item)}</div>
+	              <div class="sub">${escapeHtml(sub)}</div>
+	            </div>
+	            <div class="stack" style="align-items:flex-end; gap:8px;">
+	              ${stars ? `<div class="stars">${stars}</div>` : ""}
+	              ${
+	                isArchived
+	                  ? `<span class="chip">Archived</span>${statusChip(entry.status)}`
+	                  : state.libraryView === "finished" && entry.status === "finished"
+	                    ? `${statusChip(entry.status)}`
+	                    : `${statusChipButton(item.id, entry.status)}`
+	              }
+	              ${isFinishedActive && !isRated ? `<span class="chip">Not rated</span>` : ""}
+	            </div>
+	          </div>
+	          ${finishPrompt}
+	        </li>
       `;
     })
     .join("");
 
   return `
-    <div class="grid">
-      <div class="card">
-        <h2>Library</h2>
-        ${onboardingMicCheck}
-        ${
-          empty
-            ? `<div class="muted" style="margin-bottom:12px;">Mic check your taste. Add a few books you’ve read. Then we’ll do a quick mic check to rank them.</div>`
-            : ""
-        }
-        <form class="stack" data-action="add:item">
-          <input class="input" name="title" placeholder="Title" autocomplete="off" required />
-          <input class="input" name="author" placeholder="Author (optional)" autocomplete="off" />
-          <button class="btn primary" type="submit">${addLabel}</button>
-        </form>
-        ${searchPanel}
-      </div>
-      <div class="card">
-        <div class="row" style="margin-bottom:10px;">
-          <h2 style="margin:0;">Your shelf</h2>
+	    <div class="grid">
+	      <div class="card">
+	        <h2>Library</h2>
+	        ${
+	          empty
+	            ? `<div class="muted" style="margin-bottom:12px;">Mic check your taste. Add a few books you’ve read. Then we’ll do a quick mic check to rank them.</div>`
+	            : ""
+	        }
+	        <form class="stack" data-action="add:item">
+	          <input class="input" name="title" placeholder="Title" autocomplete="off" required />
+	          <input class="input" name="author" placeholder="Author (optional)" autocomplete="off" />
+	          <label class="row" style="justify-content:flex-start; gap:8px; color:var(--muted); font-size:13px;">
+	            <input type="checkbox" name="already_finished" />
+	            Already finished
+	          </label>
+	          <button class="btn primary" type="submit">${addLabel}</button>
+	        </form>
+	        ${searchPanel}
+	      </div>
+	      <div class="card">
+	        <div class="row" style="margin-bottom:10px;">
+	          <h2 style="margin:0;">Your shelf</h2>
           ${
             archivedCount > 0
               ? `<button class="link" data-action="toggle:archived">${state.showArchived ? "Hide archived" : "Show archived"} (${archivedCount})</button>`
-              : ""
-          }
-        </div>
-        ${
-          state.items.length === 0
-            ? `<div class="muted">Add your first book to begin.</div>`
-            : `<ul class="list">${listItems}</ul>`
-        }
-      </div>
-    </div>
-  `;
+	              : ""
+	          }
+	        </div>
+	        <div class="row" style="justify-content:flex-start; gap:8px; margin-bottom:12px;">
+	          <button class="pill" data-action="library:view" data-view="want"${state.libraryView === "want" ? ' aria-current="page"' : ""}>Want to read</button>
+	          <button class="pill" data-action="library:view" data-view="finished"${
+	            state.libraryView === "finished" ? ' aria-current="page"' : ""
+	          }>Finished</button>
+	        </div>
+	        ${initiationBanner}
+	        ${
+	          state.items.length === 0
+	            ? `<div class="muted">Add your first book to begin.</div>`
+	            : listRows.length === 0
+	              ? `<div class="muted">${
+	                  state.libraryView === "finished" ? "No finished books yet." : "No want-to-read books yet."
+	                }</div>`
+	              : `<ul class="list">${listItems}</ul>`
+	        }
+	      </div>
+	    </div>
+	  `;
 }
 
 function renderSearchPanel(state) {
@@ -270,11 +292,11 @@ function renderCompare(state) {
   const stepsLeft = Math.max(0, stepsTotal - stepsDone);
 
   if (!session) {
-    const canStart = state.finishedIds.length >= 2;
+    const canStart = state.finishedIds.length >= 5;
     return `
       <div class="card signalContainer" data-kind="miccheck-landing">
         <h2>Mic check</h2>
-        <div class="muted">${canStart ? "Ten quick picks. Your shelf will snap into place." : "Add at least 2 finished books to begin."}</div>
+        <div class="muted">${canStart ? "Ten quick picks. Your shelf will snap into place." : "Add at least 5 finished books to begin."}</div>
         <div style="height:12px;"></div>
         <button class="btn primary signalCTA" data-action="start:miccheck" ${canStart ? "" : "disabled"}>Start mic check</button>
       </div>
@@ -301,7 +323,7 @@ function renderCompare(state) {
     return `
       <div class="card">
         <h2>Mic check</h2>
-        <div class="muted">Add at least 2 finished books to compare.</div>
+        <div class="muted">Add at least 5 finished books to compare.</div>
         <div style="height:12px;"></div>
         <button class="btn" data-action="nav:library">Back to library</button>
       </div>

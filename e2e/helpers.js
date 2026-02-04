@@ -40,7 +40,30 @@ export async function setRowFinished(page, title, finished) {
   await expect(chip).toBeVisible();
   const label = (await chip.textContent())?.trim();
   const isFinished = label === "Finished";
-  if (finished !== isFinished) await chip.click();
+  if (finished === isFinished) return;
+
+  const footer = page.locator(".footer").first();
+  const beforeText = (await footer.textContent()) ?? "";
+  const beforeMatch = beforeText.match(/Finished:\s*(\d+)/);
+  const before = beforeMatch ? Number(beforeMatch[1]) : null;
+  await chip.click();
+  if (before != null) {
+    const delta = finished ? 1 : -1;
+    await expect.poll(async () => {
+      const t = (await footer.textContent()) ?? "";
+      const m = t.match(/Finished:\s*(\d+)/);
+      return m ? Number(m[1]) : null;
+    }).toBe(before + delta);
+  }
+}
+
+export async function setLibraryView(page, view) {
+  if (view !== "want" && view !== "finished") throw new Error(`Invalid library view: ${view}`);
+  await page.locator('[data-action="nav:library"]').click();
+  const btn = page.locator(`[data-action="library:view"][data-view="${view}"]`);
+  await expect(btn).toBeVisible();
+  await btn.click();
+  await expect(btn).toHaveAttribute("aria-current", "page");
 }
 
 export async function startMicCheck(page) {
