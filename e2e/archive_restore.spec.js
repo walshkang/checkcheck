@@ -20,7 +20,7 @@ test("Archive hides item from library + removes from scoring pool; restore bring
   // Create at least one comparison so we have some scoring signal.
   await startMicCheck(page);
   await winA(page);
-  await page.locator('[data-action="nav:library"]').click();
+  await page.locator('.topbar [data-action="nav:library"]').click();
 
   const betaRow = page
     .locator('.list-item[data-kind="library-item"]')
@@ -34,7 +34,7 @@ test("Archive hides item from library + removes from scoring pool; restore bring
   await betaRow.click();
   await expect(page.getByText(/detail/i)).toBeVisible();
   await page.locator('[data-action="item:archive"]').click();
-  await page.locator('[data-action="nav:library"]').click();
+  await page.locator('.topbar [data-action="nav:library"]').click();
 
   // Hidden by default.
   await expect(
@@ -65,11 +65,10 @@ test("Archive hides item from library + removes from scoring pool; restore bring
 
   await betaArchivedRow.click();
   await page.locator('[data-action="item:restore"]').click();
-  await page.locator('[data-action="nav:library"]').click();
+  await page.locator('.topbar [data-action="nav:library"]').click();
 
   // Back in active list.
   await expect(
     page.locator('.list-item[data-kind="library-item"]').filter({ hasText: "Beta" })
   ).toHaveCount(1);
 });
-

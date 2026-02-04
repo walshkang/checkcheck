@@ -94,6 +94,18 @@ function renderLibrary(state) {
   const addLabel = empty ? "Add your first book" : "Add book";
   const searchPanel = renderSearchPanel(state);
   const archivedCount = state.archivedIds?.length ?? 0;
+  const showOnboardingMicCheck = state.comparisons.length === 0 && canCompare;
+  const onboardingMicCheck = showOnboardingMicCheck
+    ? `
+        <div class="card" data-kind="onboarding-miccheck" style="margin: 12px 0 14px 0;">
+          <div class="kicker">Onboarding</div>
+          <h3 style="margin: 6px 0 4px 0;">Ready for a mic check?</h3>
+          <div class="muted">Ten quick picks. Your shelf will snap into place.</div>
+          <div style="height:12px;"></div>
+          <button class="btn primary" type="button" data-action="start:miccheck">Start mic check</button>
+        </div>
+      `
+    : "";
 
   const listItems = state.libraryRows
     .map((row) => {
@@ -150,6 +162,7 @@ function renderLibrary(state) {
     <div class="grid">
       <div class="card">
         <h2>Library</h2>
+        ${onboardingMicCheck}
         ${
           empty
             ? `<div class="muted" style="margin-bottom:12px;">Mic check your taste. Add a few books you’ve read. Then we’ll do a quick mic check to rank them.</div>`
@@ -161,15 +174,6 @@ function renderLibrary(state) {
           <button class="btn primary" type="submit">${addLabel}</button>
         </form>
         ${searchPanel}
-        <div style="height:12px;"></div>
-        <div class="row">
-          <button class="btn primary" data-action="start:miccheck" ${canCompare ? "" : "disabled"}>
-            Start mic check
-          </button>
-          <div class="muted" style="font-size:13px;">
-            ${canCompare ? "Ratings are relative to your library." : "Add at least 2 finished books to start a mic check."}
-          </div>
-        </div>
       </div>
       <div class="card">
         <div class="row" style="margin-bottom:10px;">

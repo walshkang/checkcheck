@@ -7,12 +7,10 @@ export async function gotoApp(page) {
 }
 
 export async function wipeAll(page) {
-  page.once("dialog", (d) => d.accept());
   await page.locator('[data-action="dev:wipeAll"]').click();
 }
 
 export async function resetDisplay(page) {
-  page.once("dialog", (d) => d.accept());
   await page.locator('[data-action="dev:resetDerived"]').click();
 }
 
@@ -40,6 +38,9 @@ export async function setRowFinished(page, title, finished) {
 }
 
 export async function startMicCheck(page) {
+  // Mic check is a separate surface; navigate there explicitly so this doesn't
+  // accidentally click a different "start" CTA.
+  await page.locator('[data-action="nav:compare"]').click();
   await page.locator('[data-action="start:miccheck"]').click();
   await expect(page.locator('[data-action="compare:skip"]')).toBeVisible();
 }
