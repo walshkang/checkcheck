@@ -179,6 +179,12 @@ input {
   font-size: 14px;
 }
 
+.btn.small {
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
 .btn.primary {
   background: rgba(27, 111, 90, 0.92);
   color: #fff;
@@ -206,6 +212,10 @@ input {
   .btns {
     grid-template-columns: 1fr;
   }
+}
+
+.compareSecondary .btn.small {
+  opacity: 0.78;
 }
 
 .input {

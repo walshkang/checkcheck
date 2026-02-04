@@ -409,12 +409,17 @@ function renderCompare(state) {
 	          </div>
 	        </div>
 	      <div style="height:12px;"></div>
-	      <div class="btns">
-        <button class="btn primary" data-action="compare:win" data-winner="a" ${isPending ? "disabled" : ""}>A wins</button>
-        <button class="btn primary" data-action="compare:win" data-winner="b" ${isPending ? "disabled" : ""}>B wins</button>
-        <button class="btn" data-action="compare:skip" ${isPending ? "disabled" : ""}>Skip</button>
-        <button class="btn danger" data-action="compare:undo" ${isPending ? "disabled" : ""}>Undo</button>
-      </div>
+	      <div class="compareActions">
+	        <div class="row compareSecondary" style="justify-content:flex-start; flex-wrap:wrap;">
+	          <button class="btn small" data-action="compare:win" data-winner="a" ${isPending ? "disabled" : ""}>A wins</button>
+	          <button class="btn small" data-action="compare:win" data-winner="b" ${isPending ? "disabled" : ""}>B wins</button>
+	        </div>
+	        <div style="height:10px;"></div>
+	        <div class="row" style="justify-content:flex-start; flex-wrap:wrap;">
+	          <button class="btn" data-action="compare:skip" ${isPending ? "disabled" : ""}>Skip</button>
+	          <button class="btn danger" data-action="compare:undo" ${isPending ? "disabled" : ""}>Undo</button>
+	        </div>
+	      </div>
     </div>
   `;
 }
