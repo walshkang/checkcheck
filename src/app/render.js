@@ -180,7 +180,7 @@ function renderLibrary(state) {
 	        ? "Archived — restore to compare."
 	        : isFinishedActive
           ? isRated
-            ? `Rank #${rank} of ${scoredCount} · ${formatTopPct(derived.percentile)} · Based on ${derived.comparisons_count} comparisons`
+            ? `${formatTopPct(derived.percentile)} · Based on ${derived.comparisons_count} comparisons`
             : "Not rated yet — do a mic check."
           : "Add a few finished books, then we’ll do a quick mic check to rank them.";
         const titlePrefix =

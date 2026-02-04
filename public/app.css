@@ -35,7 +35,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font-family: inherit;
 }
 
@@ -291,16 +292,16 @@ input {
 }
 
 .rankBadge {
-  font-family: var(--mono);
   font-size: 12px;
   color: var(--muted);
   margin-right: 8px;
+  font-variant-numeric: tabular-nums;
 }
 
 .rankScore {
-  font-family: var(--mono);
   font-size: 12px;
   margin-top: -2px;
+  font-variant-numeric: tabular-nums;
 }
 
 .tone-good {
