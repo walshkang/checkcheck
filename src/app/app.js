@@ -45,7 +45,8 @@ export async function startApp() {
 
     derivedById: new Map(),
     rankById: new Map(),
-    finishedIds: [],
+    finishedIds: [], // active finished (archived excluded)
+    archivedIds: [],
     scoredIds: [],
     libraryRows: [],
 
@@ -53,6 +54,8 @@ export async function startApp() {
     session: null,
     currentPair: null,
     toast: null,
+
+    showArchived: false,
 
     searchEnabled,
     searchLangMode: "prefer_en", // prefer_en | any
@@ -120,8 +123,10 @@ export async function startApp() {
   }
 
   function rebuildSelectors() {
+    state.archivedIds = state.libraryEntries.filter((e) => !!e.archived_at).map((e) => e.item_id);
+
     state.finishedIds = state.libraryEntries
-      .filter((e) => e.status === "finished")
+      .filter((e) => e.status === "finished" && !e.archived_at)
       .map((e) => e.item_id);
 
     state.scoredIds = state.finishedIds.filter((id) => state.derivedById.get(id)?.is_scored);
@@ -154,7 +159,7 @@ export async function startApp() {
       });
 
     const other = state.libraryEntries
-      .filter((e) => e.status !== "finished")
+      .filter((e) => e.status !== "finished" && !e.archived_at)
       .map((e) => ({ entry: e, item: state.itemsById.get(e.item_id) }))
       .sort((a, b) => {
         const ca = a.entry?.created_at ?? "";
@@ -165,7 +170,21 @@ export async function startApp() {
       })
       .map(({ item, entry }) => ({ item, entry, derived: null, rank: null }));
 
-    state.libraryRows = [...finishedRows, ...other].filter((r) => r.item && r.entry);
+    const archived = state.showArchived
+      ? state.libraryEntries
+          .filter((e) => !!e.archived_at)
+          .map((e) => ({ entry: e, item: state.itemsById.get(e.item_id) }))
+          .sort((a, b) => {
+            const aa = a.entry?.archived_at ?? "";
+            const ab = b.entry?.archived_at ?? "";
+            if (aa > ab) return -1;
+            if (aa < ab) return 1;
+            return a.item.id < b.item.id ? -1 : 1;
+          })
+          .map(({ item, entry }) => ({ item, entry, derived: null, rank: null }))
+      : [];
+
+    state.libraryRows = [...finishedRows, ...other, ...archived].filter((r) => r.item && r.entry);
   }
 
   function setSurface(surface) {
@@ -182,9 +201,13 @@ export async function startApp() {
       state.currentPair = null;
       return;
     }
+    const activeSet = new Set(state.finishedIds);
+    const activeComparisons = state.comparisons.filter(
+      (c) => activeSet.has(c.item_a_id) && activeSet.has(c.item_b_id)
+    );
     state.currentPair = pickPair({
       finishedIds: state.finishedIds,
-      comparisons: state.comparisons,
+      comparisons: activeComparisons,
       derivedById: state.derivedById,
       targetId: state.session.target_item_id
     });
@@ -272,19 +295,33 @@ export async function startApp() {
     if (!r) return;
 
     const sourceKey = r?.source?.provider === "openlibrary" ? r.source.key : null;
-    const existsBySource =
-      sourceKey &&
-      state.items.some((it) => it?.source?.provider === "openlibrary" && it?.source?.key === sourceKey);
-    if (existsBySource) {
-      setToast("Already in your library.", { hint: "Relative to your library." });
-      return;
+    if (sourceKey) {
+      const existing = state.items.find(
+        (it) => it?.source?.provider === "openlibrary" && it?.source?.key === sourceKey
+      );
+      if (existing) {
+        const entry = state.libraryByItemId.get(existing.id);
+        if (entry?.archived_at) {
+          await handleRestore(existing.id);
+          return;
+        }
+        setToast("Already in your library.", { hint: "Relative to your library." });
+        return;
+      }
     }
 
     const key = normalizeKey(r.title, r.author);
-    const existsByText = !sourceKey && state.items.some((it) => normalizeKey(it.title, it.author) === key);
-    if (existsByText) {
-      setToast("Already in your library.", { hint: "Try a different edition or spelling." });
-      return;
+    if (!sourceKey) {
+      const existing = state.items.find((it) => normalizeKey(it.title, it.author) === key);
+      if (existing) {
+        const entry = state.libraryByItemId.get(existing.id);
+        if (entry?.archived_at) {
+          await handleRestore(existing.id);
+          return;
+        }
+        setToast("Already in your library.", { hint: "Try a different edition or spelling." });
+        return;
+      }
     }
 
     const { item, entry } = await idb.addItem({
@@ -313,6 +350,28 @@ export async function startApp() {
 
     await recomputeAndPersist();
     render();
+  }
+
+  async function handleArchive(itemId) {
+    const entry = await idb.archiveItem(itemId);
+    if (!entry) return;
+    state.libraryByItemId.set(itemId, entry);
+    const idx = state.libraryEntries.findIndex((e) => e.item_id === itemId);
+    if (idx >= 0) state.libraryEntries[idx] = entry;
+    await recomputeAndPersist();
+    render();
+    setToast("Removed from library.", { hint: "Comparisons kept." });
+  }
+
+  async function handleRestore(itemId) {
+    const entry = await idb.unarchiveItem(itemId);
+    if (!entry) return;
+    state.libraryByItemId.set(itemId, entry);
+    const idx = state.libraryEntries.findIndex((e) => e.item_id === itemId);
+    if (idx >= 0) state.libraryEntries[idx] = entry;
+    await recomputeAndPersist();
+    render();
+    setToast("Restored.", { hint: "Relative to your library." });
   }
 
   function startSession({ stepsTotal, mode, targetItemId = null }) {
@@ -425,6 +484,12 @@ export async function startApp() {
     if (action === "dev:resetDerived") return void handleResetDerived();
     if (action === "dev:wipeAll") return void handleWipeAll().catch((e) => alert(String(e)));
 
+    if (action === "toggle:archived") {
+      state.showArchived = !state.showArchived;
+      render();
+      return;
+    }
+
     if (action === "start:miccheck") return startSession({ stepsTotal: 10, mode: "mic_check" });
     if (action === "start:more") {
       const steps = Number(el.getAttribute("data-steps") || "5");
@@ -451,6 +516,19 @@ export async function startApp() {
       state.detailItemId = itemId;
       state.surface = "detail";
       return render();
+    }
+
+    if (action === "item:archive") {
+      const itemId = state.detailItemId;
+      if (!itemId) return;
+      if (!confirm("Remove from library? (keeps comparisons)")) return;
+      return void handleArchive(itemId).catch((e) => alert(String(e)));
+    }
+
+    if (action === "item:restore") {
+      const itemId = state.detailItemId;
+      if (!itemId) return;
+      return void handleRestore(itemId).catch((e) => alert(String(e)));
     }
 
     if (action === "quick:status") {

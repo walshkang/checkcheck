@@ -14,14 +14,21 @@ export function recomputeDerived(
 ) {
   if (curve !== "v1") throw new Error(`Unsupported curve version: ${curve}`);
 
-  const finishedIds = libraryEntries
-    .filter((e) => e.status === "finished")
+  const activeFinishedIds = libraryEntries
+    .filter((e) => e.status === "finished" && !e.archived_at)
     .map((e) => e.item_id);
 
-  const { elos, compsCount } = replayElo(comparisons);
+  const activeFinishedSet = new Set(activeFinishedIds);
+
+  // Only comparisons among active-finished items should influence Elo.
+  const activeComparisons = comparisons.filter(
+    (c) => activeFinishedSet.has(c.item_a_id) && activeFinishedSet.has(c.item_b_id)
+  );
+
+  const { elos, compsCount } = replayElo(activeComparisons);
 
   // Ensure finished items exist even if they have no comparisons yet.
-  for (const id of finishedIds) {
+  for (const id of activeFinishedIds) {
     if (!elos.has(id)) elos.set(id, 1500);
     if (!compsCount.has(id)) compsCount.set(id, 0);
   }
@@ -40,7 +47,7 @@ export function recomputeDerived(
 
   // We can compute "scores" for items that have signal (decided comparisons),
   // but we only show ratings if stars_display exists or gets bootstrapped.
-  const scoredIds = finishedIds.filter((id) => {
+  const scoredIds = activeFinishedIds.filter((id) => {
     const cd = asMap.has(id) ? asMap.get(id) : null;
     return (compsCount.get(id) ?? 0) > 0 || cd != null;
   });
@@ -74,7 +81,7 @@ export function recomputeDerived(
   }
 
   const derivedById = new Map();
-  for (const id of finishedIds) {
+  for (const id of activeFinishedIds) {
     const currentDisplay = asMap.has(id) ? asMap.get(id) : null;
     const comparisons_count = compsCount.get(id) ?? 0;
 
@@ -129,7 +136,7 @@ export function recomputeDerived(
 
   return {
     curve_version: "v1",
-    finished_count: finishedIds.length,
+    finished_count: activeFinishedIds.length,
     scored_count: scoredIds.length,
     derivedById,
     rankById

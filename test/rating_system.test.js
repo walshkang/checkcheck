@@ -93,3 +93,29 @@ test("ordering stability: tie-breaks by item_id", () => {
   assert.equal(rankById.get("a"), 1);
   assert.equal(rankById.get("b"), 2);
 });
+
+test("archived items do not influence Elo (comparisons filtered before replay)", () => {
+  const comparisons = [
+    { id: 1, created_at: 1, item_a_id: "a", item_b_id: "b", winner_item_id: "a" },
+    { id: 2, created_at: 2, item_a_id: "a", item_b_id: "c", winner_item_id: "a" }
+  ];
+
+  const libraryArchivedB = [
+    { item_id: "a", status: "finished" },
+    { item_id: "b", status: "finished", archived_at: "2026-02-04T00:00:00.000Z" },
+    { item_id: "c", status: "finished" }
+  ];
+  const r1 = recomputeDerived({ libraryEntries: libraryArchivedB, comparisons });
+  assert.equal(r1.derivedById.has("b"), false);
+  assert.equal(r1.derivedById.get("a").elo, 1512);
+  assert.equal(r1.derivedById.get("c").elo, 1488);
+
+  const libraryNotArchived = [
+    { item_id: "a", status: "finished" },
+    { item_id: "b", status: "finished", archived_at: null },
+    { item_id: "c", status: "finished" }
+  ];
+  const r2 = recomputeDerived({ libraryEntries: libraryNotArchived, comparisons });
+  assert.equal(r2.derivedById.has("b"), true);
+  assert.ok(r2.derivedById.get("a").elo > 1512);
+});

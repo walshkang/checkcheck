@@ -100,12 +100,35 @@ export async function setLibraryStatus(itemId, status) {
   return withTx([STORES.libraryEntries], "readwrite", async (s) => {
     const prev = await reqToPromise(s[STORES.libraryEntries].get(itemId));
     const next = {
+      ...(prev ?? {}),
       item_id: itemId,
       status,
       finished_at: status === "finished" ? prev?.finished_at ?? now : null,
       created_at: prev?.created_at ?? now,
       updated_at: now
     };
+    s[STORES.libraryEntries].put(next);
+    return next;
+  });
+}
+
+export async function archiveItem(itemId) {
+  const now = new Date().toISOString();
+  return withTx([STORES.libraryEntries], "readwrite", async (s) => {
+    const prev = await reqToPromise(s[STORES.libraryEntries].get(itemId));
+    if (!prev) return null;
+    const next = { ...prev, archived_at: now, updated_at: now };
+    s[STORES.libraryEntries].put(next);
+    return next;
+  });
+}
+
+export async function unarchiveItem(itemId) {
+  const now = new Date().toISOString();
+  return withTx([STORES.libraryEntries], "readwrite", async (s) => {
+    const prev = await reqToPromise(s[STORES.libraryEntries].get(itemId));
+    if (!prev) return null;
+    const next = { ...prev, archived_at: null, updated_at: now };
     s[STORES.libraryEntries].put(next);
     return next;
   });
