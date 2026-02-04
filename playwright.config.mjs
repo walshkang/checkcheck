@@ -8,7 +8,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: "http://127.0.0.1:8000",
+    baseURL: "http://127.0.0.1:8000/public",
     trace: "on-first-retry"
   },
   webServer: {
@@ -24,4 +24,3 @@ export default defineConfig({
     }
   ]
 });
-
