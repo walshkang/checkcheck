@@ -160,6 +160,16 @@ function renderLibrary(state) {
 	      const isFinishedActive = entry.status === "finished" && !isArchived;
 	      const isRated = !!derived && derived.stars_display != null;
 	      const stars = isRated ? renderStars(derived.stars_display) : "";
+	      const showTypeChip =
+	        !isArchived &&
+	        state.libraryView === "want" &&
+	        entry.status !== "finished" &&
+	        (entry.type_confirmed || entry.type_suggested);
+	      const typeChip = showTypeChip
+	        ? entry.type_confirmed
+	          ? `<span class="chip">${escapeHtml(entry.type_confirmed)}</span>`
+	          : `<span class="chip suggested" title="Suggested from metadata">${escapeHtml(entry.type_suggested)}</span>`
+	        : "";
 	      const scoredCount = state.scoredIds?.length ?? 0;
 	      const sub = isArchived
 	        ? "Archived — restore to compare."
@@ -190,6 +200,7 @@ function renderLibrary(state) {
 		            </div>
 		            <div class="stack" style="align-items:flex-end; gap:8px;">
 		              ${stars || ""}
+		              ${typeChip}
 		              ${
 		                isArchived
 		                  ? `<span class="chip">Archived</span>${statusChip(entry.status)}`
@@ -276,29 +287,33 @@ function renderSearchPanel(state) {
     state.searchResults?.length
       ? `<ul class="list" style="margin-top:10px;">
           ${state.searchResults
-            .map((r, i) => {
-              const title = escapeHtml(r.title || "");
-              const author = escapeHtml(r.author || "");
-              const year = r.first_publish_year
-                ? ` · <span class="muted">${escapeHtml(r.first_publish_year)}</span>`
-                : "";
-              const cover = r.cover_url
-                ? `<img src="${escapeHtml(r.cover_url)}" alt="" width="32" height="48" style="border-radius:8px; border:1px solid var(--stroke);" loading="lazy" />`
-                : `<div style="width:32px; height:48px; border-radius:8px; border:1px solid var(--stroke); background: rgba(255,255,255,0.4);"></div>`;
+	            .map((r, i) => {
+	              const title = escapeHtml(r.title || "");
+	              const author = escapeHtml(r.author || "");
+	              const suggested = r.type_suggested
+	                ? `<div class="sub">Suggested: ${escapeHtml(r.type_suggested)}</div>`
+	                : "";
+	              const year = r.first_publish_year
+	                ? ` · <span class="muted">${escapeHtml(r.first_publish_year)}</span>`
+	                : "";
+	              const cover = r.cover_url
+	                ? `<img src="${escapeHtml(r.cover_url)}" alt="" width="32" height="48" style="border-radius:8px; border:1px solid var(--stroke);" loading="lazy" />`
+	                : `<div style="width:32px; height:48px; border-radius:8px; border:1px solid var(--stroke); background: rgba(255,255,255,0.4);"></div>`;
 
               return `
                 <li class="search-item" data-kind="search-result">
                   <div class="row" style="align-items:center;">
                     ${cover}
-                    <div class="stack" style="gap:2px; margin-left:10px; flex:1;">
-                      <div class="title">${title}</div>
-                      <div class="sub">${author || `<span class="muted">Unknown author</span>`}${year}</div>
-                    </div>
-                    <button class="btn" type="button" data-action="search:add" data-result-idx="${i}">Add</button>
-                  </div>
-                </li>
-              `;
-            })
+	                    <div class="stack" style="gap:2px; margin-left:10px; flex:1;">
+	                      <div class="title">${title}</div>
+	                      <div class="sub">${author || `<span class="muted">Unknown author</span>`}${year}</div>
+	                      ${suggested}
+	                    </div>
+	                    <button class="btn" type="button" data-action="search:add" data-result-idx="${i}">Add</button>
+	                  </div>
+	                </li>
+	              `;
+	            })
             .join("")}
         </ul>`
       : "";

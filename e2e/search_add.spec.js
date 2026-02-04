@@ -48,6 +48,7 @@ test("Search (flagged) -> add -> export contains optional fields -> wipe -> impo
 
   const result = page.locator('.search-item[data-kind="search-result"]').first();
   await expect(result).toBeVisible();
+  await expect(result).toContainText("Suggested: Fiction");
 
   await result.locator('[data-action="search:add"]').click();
 

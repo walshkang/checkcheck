@@ -311,6 +311,11 @@ input {
   color: var(--muted);
 }
 
+.chip.suggested {
+  opacity: 0.78;
+  border-style: dashed;
+}
+
 button.chip {
   cursor: pointer;
 }

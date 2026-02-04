@@ -294,15 +294,18 @@ export async function startApp() {
     state.searchError = null;
     render();
 
-    const reqId = ++state.searchRequestId;
-    try {
-      const results = await searchOpenLibrary(q, { limit: 10, langMode: state.searchLangMode });
-      if (reqId !== state.searchRequestId) return; // stale response
-      state.searchResults = results;
-      state.searchStatus = "done";
-      state.searchError = null;
-      render();
-    } catch (e) {
+	    const reqId = ++state.searchRequestId;
+	    try {
+	      const results = await searchOpenLibrary(q, { limit: 10, langMode: state.searchLangMode });
+	      if (reqId !== state.searchRequestId) return; // stale response
+	      state.searchResults = results.map((r) => ({
+	        ...r,
+	        type_suggested: mapSubjectsToTypeSuggested(r.raw_subjects)
+	      }));
+	      state.searchStatus = "done";
+	      state.searchError = null;
+	      render();
+	    } catch (e) {
       if (reqId !== state.searchRequestId) return;
       state.searchStatus = "error";
       state.searchResults = [];
