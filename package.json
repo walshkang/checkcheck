@@ -1,0 +1,15 @@
+{
+  "name": "checkcheck",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "^1.46.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "e2e": "npx playwright test",
+    "e2e:ui": "npx playwright test --ui",
+    "e2e:debug": "npx playwright test --debug",
+    "e2e:install": "npx playwright install"
+  }
+}

@@ -1,0 +1,175 @@
+{
+  "project_name": "checkcheck",
+  "tagline": "Mic-check your taste: comparisons-first personal ratings for books (Phase 1), expandable to films + restaurants (Phase 2+).",
+  "version": "1.0.0-phase1-spec",
+  "last_updated": "2026-02-03",
+  "brand": {
+    "working_name": "checkcheck",
+    "pronunciation": "check-check",
+    "vibe": "mic check; playful, fast, comparisons-first",
+    "core_metaphors": [
+      "Mic check: quick calibration to find your true signal",
+      "Double check: confirm preference by head-to-head comparisons",
+      "책 (chaek): subtle book wink"
+    ]
+  },
+  "north_star": {
+    "goal": "Validate that reviewing against yourself via A/B comparisons feels delightful and produces scores you trust.",
+    "success_metrics": [
+      "User completes a 10-comparison sprint in < 60 seconds.",
+      "After ~30 comparisons, user's top 5 and bottom 5 feel 'basically right' without manual star entry.",
+      "User returns within 48 hours to add an item or do 5 more comparisons."
+    ]
+  },
+  "development_principles": [
+    "Library is source of truth: only explicitly added items participate in scoring and recommendations.",
+    "Comparisons are the primitive action; stars are derived presentation.",
+    "Deterministic scoring: no AI decides ratings. (AI, if ever used, can only label metadata once at ingestion.)",
+    "Version everything that affects meaning (rating curve, taxonomy); never silently rewrite history.",
+    "Web-first, mobile-responsive: on small screens, only one primary surface at a time."
+  ],
+  "invariants": [
+    "Persist raw comparisons as the durable truth; recompute scores from comparisons deterministically.",
+    "Display uses quarter-star rounding (0.25) with hysteresis to prevent jitter.",
+    "Expose a stacked ranking signal: rank_score_raw (0.00–5.00, 2 decimals) + rank/percentile.",
+    "Avoid false precision in list views (quarter stars); reserve decimals for detail views."
+  ],
+  "docs": {
+    "read_first": [
+      "AGENTS.md",
+      "CONTEXT.md",
+      "docs/RATING_SYSTEM.md",
+      "docs/UX_RULES.md"
+    ],
+    "supporting": [
+      "docs/PAIR_SELECTION.md",
+      "docs/INSTRUMENTATION.md",
+      "docs/COPY_TONE.md"
+    ]
+  },
+  "roadmap": {
+    "phase_1": {
+      "name": "checkcheck MVP (Books Only)",
+      "goal": "Prove the comparisons-first loop is fun, fast, and trustworthy. Ship scoring + hysteresis + stacked ranking.",
+      "non_goals": [
+        "No cross-user similarity / ML models.",
+        "No public profiles, feeds, follows, or sharing.",
+        "No films/restaurants yet (unless needed for UI scaffolding only)."
+      ],
+      "epics": [
+        {
+          "id": "P1-E1",
+          "name": "Library + Item Ingestion",
+          "outcome": "User can build a personal library quickly and confidently.",
+          "scope": [
+            "Manual add (title, author) as baseline.",
+            "Optional: external search integration (later) behind a flag.",
+            "Statuses: want / reading / finished; finished_at.",
+            "De-dupe strategy documented (work vs edition)."
+          ],
+          "acceptance_criteria": [
+            "User can add 10 items in < 3 minutes.",
+            "Library list renders quickly and remains usable on mobile."
+          ]
+        },
+        {
+          "id": "P1-E2",
+          "name": "Compare Session",
+          "outcome": "User can complete a 10-comparison sprint with near-zero friction.",
+          "scope": [
+            "Compare surface (A vs B) with primary actions: A wins / B wins / Skip / Undo.",
+            "Persist comparison rows (user_id, a, b, winner|null, created_at).",
+            "Pair selection: meaningful matchups (see docs/PAIR_SELECTION.md)."
+          ],
+          "acceptance_criteria": [
+            "10 comparisons can be completed in < 60 seconds.",
+            "Undo reverses the most recent comparison reliably.",
+            "Skip does not corrupt scoring."
+          ]
+        },
+        {
+          "id": "P1-E3",
+          "name": "Deterministic Scoring + Display",
+          "outcome": "Scores feel true, stable, and culturally intuitive.",
+          "scope": [
+            "Compute per-item strength (Elo) deterministically from comparisons.",
+            "Convert strength→percentile→rank_score_raw via versioned curve.",
+            "Compute quarter-star candidate and apply hysteresis to stars_display.",
+            "Stacked rating UI: quarter stars + rank_score_raw + rank/percentile + confidence (comparison count)."
+          ],
+          "acceptance_criteria": [
+            "Stars do not jitter near boundaries (hysteresis tests pass).",
+            "Sorting by rank_score_raw is stable and consistent.",
+            "Detail view explains 'relative to your library' clearly."
+          ]
+        },
+        {
+          "id": "P1-E4",
+          "name": "Item Detail + Trust Tools",
+          "outcome": "When something feels off, the fix is obvious and doesn't feel like debugging.",
+          "scope": [
+            "Item detail shows: rating stack, comparison history, key wins/losses.",
+            "Actions: 'Do 3 more comparisons' and 'Re-seed ratings' (reset derived scores without deleting comparisons, or optional reset comparisons).",
+            "Confidence indicator (based on comps count) and how-to-improve prompt."
+          ],
+          "acceptance_criteria": [
+            "User can understand why an item ranks where it does.",
+            "User can correct an 'off' ranking by doing a few more comparisons."
+          ]
+        },
+        {
+          "id": "P1-E5",
+          "name": "Tuning Harness + Instrumentation",
+          "outcome": "You can tune generosity + hysteresis confidently using real usage traces.",
+          "scope": [
+            "Local tuning page or script that simulates comparisons and visualizes distribution.",
+            "Event logging (local-first OK) for: comparisons completed, session length, undo usage, re-seed usage.",
+            "Curve versioning and migration notes."
+          ],
+          "acceptance_criteria": [
+            "You can adjust the curve anchors and see distribution changes immediately.",
+            "You can detect jitter/regressions in a repeatable way."
+          ]
+        }
+      ]
+    },
+    "phase_2": {
+      "name": "Cross-Domain + Similarity Models",
+      "goal": "Expand to films/restaurants and learn cross-domain taste overlaps; build 'people like you' and predictive recs.",
+      "entry_criteria": [
+        "Phase 1 loop validated (repeat usage + trust in scores).",
+        "Rating curve/hysteresis stabilized and versioned.",
+        "Sufficient data per user to form robust user vectors (or strong cold-start strategy)."
+      ],
+      "epics": [
+        {
+          "id": "P2-E1",
+          "name": "Shared Taste Taxonomy",
+          "scope": [
+            "Define a strict, shared vibe taxonomy (energy, tone, novelty, texture, pace, social mode).",
+            "Add domain-specific metadata layers (genre/cuisine/etc).",
+            "Version taxonomy and store labels as immutable per item version."
+          ]
+        },
+        {
+          "id": "P2-E2",
+          "name": "User Vectors + Nearest Neighbors",
+          "scope": [
+            "Derive user vectors from ratings + tags across domains.",
+            "kNN similarity + explanations ('you both love cozy + witty').",
+            "Cross-domain 'bridge' experiments (book→film→restaurant)."
+          ]
+        },
+        {
+          "id": "P2-E3",
+          "name": "Tabular Predictive Models",
+          "scope": [
+            "Baselines: kNN, random forest/GBDT for like/dislike.",
+            "Time-split evaluation, context leakage prevention for restaurants.",
+            "Promotion path to matrix factorization / factorization machines if needed."
+          ]
+        }
+      ]
+    }
+  }
+}
