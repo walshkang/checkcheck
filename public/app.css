@@ -362,6 +362,37 @@ button.chip:hover {
   border-radius: var(--radius);
   padding: 14px;
   background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  user-select: none;
+  transition: transform 140ms ease, opacity 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.compareCard:active {
+  transform: scale(0.992);
+}
+
+.compareCard.isChosen {
+  border-color: rgba(27, 111, 90, 0.35);
+  box-shadow: 0 0 0 3px rgba(27, 111, 90, 0.10);
+  transform: translateY(-1px);
+}
+
+.compareCard.isDimmed {
+  opacity: 0.72;
+}
+
+.compareCards.enter .compareCard {
+  animation: compareEnter 140ms ease-out both;
+}
+
+@keyframes compareEnter {
+  from { opacity: 0.0; transform: translateY(2px); }
+  to { opacity: 1.0; transform: translateY(0px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compareCard { transition: none; }
+  .compareCards.enter .compareCard { animation: none; }
 }
 
 .kicker {

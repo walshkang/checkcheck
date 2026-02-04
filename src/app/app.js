@@ -70,7 +70,10 @@ export async function startApp() {
     searchStatus: "idle", // idle | loading | done | error
     searchResults: [],
     searchError: null,
-    searchRequestId: 0
+    searchRequestId: 0,
+
+    comparePending: null, // { action: "win"|"skip"|"undo", winner: "a"|"b"|null, at: number }
+    compareEnterAt: 0
   };
 
   function setToast(msg, { hint = null, ms = 2500 } = {}) {
@@ -539,29 +542,47 @@ export async function startApp() {
 
   async function handleCompare({ winner }) {
     if (!state.session || !state.currentPair) return;
+    if (state.comparePending) return;
     const { a, b } = state.currentPair;
     const winnerId = winner === "a" ? a : winner === "b" ? b : null;
 
-    const c = await idb.addComparison({
-      item_a_id: a,
-      item_b_id: b,
-      winner_item_id: winnerId,
-      session_id: state.session.session_id,
-      mode: state.session.mode
-    });
-    state.comparisons.push(c);
-    // Bootstrap ratings only on *decided* comparisons. A Skip should not resurrect ratings after "Reset display".
-    await recomputeAndPersistWithBootstrap(winnerId ? [a, b] : []);
+    state.compareEnterAt = 0;
+    state.comparePending = { action: winnerId ? "win" : "skip", winner: winner ?? null, at: Date.now() };
     render();
+    try {
+      const c = await idb.addComparison({
+        item_a_id: a,
+        item_b_id: b,
+        winner_item_id: winnerId,
+        session_id: state.session.session_id,
+        mode: state.session.mode
+      });
+      state.comparisons.push(c);
+      // Bootstrap ratings only on *decided* comparisons. A Skip should not resurrect ratings after "Reset display".
+      await recomputeAndPersistWithBootstrap(winnerId ? [a, b] : []);
+    } finally {
+      state.comparePending = null;
+      state.compareEnterAt = Date.now();
+      render();
+    }
   }
 
   async function handleUndo() {
-    const deleted = await idb.deleteLastComparison();
-    if (!deleted) return;
-    state.comparisons = state.comparisons.filter((c) => c.id !== deleted.id);
-    // Undo should not bootstrap ratings either; just recompute from truth.
-    await recomputeAndPersistWithBootstrap([]);
+    if (state.comparePending) return;
+    state.compareEnterAt = 0;
+    state.comparePending = { action: "undo", winner: null, at: Date.now() };
     render();
+    try {
+      const deleted = await idb.deleteLastComparison();
+      if (!deleted) return;
+      state.comparisons = state.comparisons.filter((c) => c.id !== deleted.id);
+      // Undo should not bootstrap ratings either; just recompute from truth.
+      await recomputeAndPersistWithBootstrap([]);
+    } finally {
+      state.comparePending = null;
+      state.compareEnterAt = Date.now();
+      render();
+    }
   }
 
   async function handleExport() {
@@ -630,6 +651,7 @@ export async function startApp() {
 	    if (!el) return;
 	    const action = el.getAttribute("data-action");
 	    if (!action) return;
+	    if (state.comparePending && (action === "compare:win" || action === "compare:skip" || action === "compare:undo")) return;
 
 	    if (action === "nav:library") return setSurface("library"), render();
 	    if (action === "nav:compare") return setSurface("compare"), render();

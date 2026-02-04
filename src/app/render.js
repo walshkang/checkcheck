@@ -321,6 +321,10 @@ function renderCompare(state) {
   const stepsDone = session ? state.comparisons.filter((c) => c.session_id === session.session_id).length : 0;
   const stepsTotal = session?.steps_total ?? 10;
   const stepsLeft = Math.max(0, stepsTotal - stepsDone);
+  const isPending = !!state.comparePending;
+  const pendingWinner = state.comparePending?.winner ?? null;
+  const enter =
+    state.compareEnterAt && Date.now() - state.compareEnterAt < 600 ? " enter" : "";
 
   if (!session) {
     const canStart = state.finishedIds.length >= 5;
@@ -371,6 +375,17 @@ function renderCompare(state) {
   const starsA = showStars ? renderStars(derivedA?.stars_display ?? null) : "";
   const starsB = showStars ? renderStars(derivedB?.stars_display ?? null) : "";
 
+  const cardClassA =
+    "compareCard" +
+    (isPending && pendingWinner === "a" ? " isChosen" : "") +
+    (isPending && pendingWinner && pendingWinner !== "a" ? " isDimmed" : "") +
+    (isPending && !pendingWinner ? " isDimmed" : "");
+  const cardClassB =
+    "compareCard" +
+    (isPending && pendingWinner === "b" ? " isChosen" : "") +
+    (isPending && pendingWinner && pendingWinner !== "b" ? " isDimmed" : "") +
+    (isPending && !pendingWinner ? " isDimmed" : "");
+
   return `
 	    <div class="card">
 	      <div class="row">
@@ -381,13 +396,13 @@ function renderCompare(state) {
         <div class="chip">${stepsDone + 1} / ${stepsTotal}</div>
       </div>
       <div style="height:12px;"></div>
-	        <div class="compareCards">
-	          <div class="compareCard">
+	        <div class="compareCards${enter}">
+	          <div class="${cardClassA}" data-action="compare:win" data-winner="a" role="button" aria-label="Choose A">
 	            <div class="title">${itemLine(itemA)}</div>
 	            <div class="sub">Relative to your library.</div>
 	          ${starsA ? `<div style="height:10px;"></div>${starsA}` : ""}
 	          </div>
-	          <div class="compareCard">
+	          <div class="${cardClassB}" data-action="compare:win" data-winner="b" role="button" aria-label="Choose B">
 	            <div class="title">${itemLine(itemB)}</div>
 	            <div class="sub">Relative to your library.</div>
 	          ${starsB ? `<div style="height:10px;"></div>${starsB}` : ""}
@@ -395,10 +410,10 @@ function renderCompare(state) {
 	        </div>
 	      <div style="height:12px;"></div>
 	      <div class="btns">
-        <button class="btn primary" data-action="compare:win" data-winner="a">A wins</button>
-        <button class="btn primary" data-action="compare:win" data-winner="b">B wins</button>
-        <button class="btn" data-action="compare:skip">Skip</button>
-        <button class="btn danger" data-action="compare:undo">Undo</button>
+        <button class="btn primary" data-action="compare:win" data-winner="a" ${isPending ? "disabled" : ""}>A wins</button>
+        <button class="btn primary" data-action="compare:win" data-winner="b" ${isPending ? "disabled" : ""}>B wins</button>
+        <button class="btn" data-action="compare:skip" ${isPending ? "disabled" : ""}>Skip</button>
+        <button class="btn danger" data-action="compare:undo" ${isPending ? "disabled" : ""}>Undo</button>
       </div>
     </div>
   `;

@@ -77,11 +77,11 @@ export async function startMicCheck(page) {
 }
 
 export async function winA(page) {
-  await page.locator('[data-action="compare:win"][data-winner="a"]').click();
+  await page.locator('button.btn[data-action="compare:win"][data-winner="a"]').click();
 }
 
 export async function winB(page) {
-  await page.locator('[data-action="compare:win"][data-winner="b"]').click();
+  await page.locator('button.btn[data-action="compare:win"][data-winner="b"]').click();
 }
 
 export async function skip(page) {
