@@ -4,22 +4,28 @@ export async function gotoApp(page) {
   await page.goto("/");
   // Footer is always present.
   await expect(page.locator('[data-action="dev:wipeAll"]')).toBeVisible();
+  await expect(page.locator('form[data-action="add:item"]')).toBeVisible();
 }
 
 export async function wipeAll(page) {
   await page.locator('[data-action="dev:wipeAll"]').click();
+  // Wait for the app to finish clearing + reloading before tests proceed.
+  await expect(page.locator(".toast .msg")).toHaveText(/Local data cleared\./);
+  await expect(page.locator(".footer")).toContainText(/Finished:\s*0/);
+  await expect(page.locator(".footer")).toContainText(/Comparisons:\s*0/);
+  await expect(page.getByText("Add your first book to begin.")).toBeVisible();
 }
 
 export async function resetDisplay(page) {
   await page.locator('[data-action="dev:resetDerived"]').click();
+  await expect(page.getByText("Display reset.")).toBeVisible();
 }
 
 export async function addBook(page, { title, author }) {
   const form = page.locator('form[data-action="add:item"]');
   await form.locator('input[name="title"]').fill(title);
   await form.locator('input[name="author"]').fill(author ?? "");
-  // Submit without relying on button text.
-  await form.locator('input[name="author"]').press("Enter");
+  await form.locator('button[type="submit"]').click();
   await expect(getRowByTitle(page, title)).toBeVisible();
 }
 

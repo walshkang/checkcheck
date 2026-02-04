@@ -97,13 +97,13 @@ function renderLibrary(state) {
   const showOnboardingMicCheck = state.comparisons.length === 0 && canCompare;
   const onboardingMicCheck = showOnboardingMicCheck
     ? `
-        <div class="card" data-kind="onboarding-miccheck" style="margin: 12px 0 14px 0;">
-          <div class="kicker">Onboarding</div>
-          <h3 style="margin: 6px 0 4px 0;">Ready for a mic check?</h3>
-          <div class="muted">Ten quick picks. Your shelf will snap into place.</div>
-          <div style="height:12px;"></div>
+        <div class="banner" data-kind="onboarding-miccheck">
+          <div class="title">Ready for a mic check?</div>
+          <div class="sub">Ten quick picks. Your shelf will snap into place.</div>
+          <div style="height:10px;"></div>
           <button class="btn primary" type="button" data-action="start:miccheck">Start mic check</button>
         </div>
+        <div style="height:12px;"></div>
       `
     : "";
 

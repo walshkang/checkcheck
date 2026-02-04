@@ -249,6 +249,13 @@ input {
   border-color: rgba(0, 0, 0, 0.22);
 }
 
+.banner {
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.66);
+  padding: 12px 12px;
+}
+
 .inlinePrompt {
   margin-top: 10px;
   padding-top: 10px;
