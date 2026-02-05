@@ -8,15 +8,27 @@ test.beforeEach(async ({ page }) => {
 });
 
 async function expectUnplacedCount(page, n) {
-  const queue = page.locator('[data-kind="unplaced-queue"]');
-  await expect(queue).toBeVisible();
-  await expect(queue).toContainText(`Unplaced (${n})`);
+  const header = page.locator('[data-kind="unplaced-header"]');
+  if (n > 0) {
+    await expect(header).toBeVisible();
+    await expect(header).toContainText(`Unplaced (${n})`);
+  } else {
+    await expect(header).toHaveCount(0);
+  }
+  await expect(page.locator('.list-item[data-kind="library-item"] .chip').filter({ hasText: "Not rated" })).toHaveCount(
+    n
+  );
 }
 
-async function clickQueueCtaForTitle(page, title) {
-  const row = page.locator('[data-kind="unplaced-item"]').filter({ hasText: title }).first();
+async function clickFirstUnplacedCta(page) {
+  const row = page
+    .locator('.list-item[data-kind="library-item"]')
+    .filter({ has: page.locator(".chip", { hasText: "Not rated" }) })
+    .first();
   await expect(row).toBeVisible();
-  await row.locator("button").first().click();
+  const title = ((await row.locator(".title").first().textContent()) ?? "").trim();
+  await row.locator('button[data-kind="unplaced-cta"][data-action="start:focus"]').click();
+  return title;
 }
 
 test("Unplaced queue is durable, locked/unlocked correctly, and shrinks after placement (persists across refresh)", async ({
@@ -34,26 +46,24 @@ test("Unplaced queue is durable, locked/unlocked correctly, and shrinks after pl
   await setRowFinished(page, "Delta", true);
   await setRowFinished(page, "Epsilon", true);
 
-  await setLibraryView(page, "finished");
+  await setLibraryView(page, "unplaced");
   await expectUnplacedCount(page, 5);
 
   // Not initiated yet: queue CTAs should unlock via mic check (since >=5 finished).
-  const queue = page.locator('[data-kind="unplaced-queue"]');
-  await expect(queue.locator('button[data-action="start:miccheck"]')).toHaveCount(3); // default collapsed view
+  await expect(page.locator('.list-item[data-kind="library-item"] button[data-action="start:miccheck"]')).toHaveCount(5);
 
   // Unlock (start mic check) and make one decided comparison.
-  await queue.locator('button[data-action="start:miccheck"]').first().click();
+  await page.locator('button[data-action="start:miccheck"]').first().click();
   await expect(page.locator('[data-action="compare:skip"]')).toBeVisible();
   await winA(page);
 
-  await setLibraryView(page, "finished");
-  await expectUnplacedCount(page, 5);
-  await expect(queue.locator('button[data-action="start:focus"]')).toHaveCount(3);
+  await setLibraryView(page, "unplaced");
+  const before = await page.locator('.list-item[data-kind="library-item"] .chip').filter({ hasText: "Not rated" }).count();
+  expect(before).toBeGreaterThanOrEqual(1);
+  await expectUnplacedCount(page, before);
 
   // Place a specific book (3 decided picks).
-  const viewAll = queue.locator('button[data-action="unplaced:toggle"]');
-  if (await viewAll.count()) await viewAll.click();
-  await clickQueueCtaForTitle(page, "Alpha");
+  const pickedTitle = await clickFirstUnplacedCta(page);
   await expect(page.locator('[data-action="compare:skip"]')).toBeVisible();
   await winA(page);
   await winA(page);
@@ -63,13 +73,16 @@ test("Unplaced queue is durable, locked/unlocked correctly, and shrinks after pl
   await expect(placed).toBeVisible();
   await placed.locator('button[data-action="after_finish:back_to_finished"]').click();
 
-  await setLibraryView(page, "finished");
-  await expectUnplacedCount(page, 4);
-  await expect(page.locator('[data-kind="unplaced-item"]', { hasText: "Alpha" })).toHaveCount(0);
+  await setLibraryView(page, "unplaced");
+  const after = await page.locator('.list-item[data-kind="library-item"] .chip').filter({ hasText: "Not rated" }).count();
+  expect(after).toBeLessThan(before);
+  await expectUnplacedCount(page, after);
+  await expect(page.locator('.list-item[data-kind="library-item"]').filter({ hasText: pickedTitle })).toHaveCount(0);
 
   await page.reload();
-  await setLibraryView(page, "finished");
-  await expectUnplacedCount(page, 4);
+  await setLibraryView(page, "unplaced");
+  await expectUnplacedCount(page, after);
+  await expect(page.locator('.list-item[data-kind="library-item"]').filter({ hasText: pickedTitle })).toHaveCount(0);
 });
 
 test("Unplaced queue is locked under 5 finished", async ({ page }) => {
@@ -83,10 +96,10 @@ test("Unplaced queue is locked under 5 finished", async ({ page }) => {
   await setRowFinished(page, "Three", true);
   await setRowFinished(page, "Four", true);
 
-  await setLibraryView(page, "finished");
+  await setLibraryView(page, "unplaced");
   await expectUnplacedCount(page, 4);
 
-  const btn = page.locator('[data-kind="unplaced-item"] button').first();
+  const btn = page.locator('.list-item[data-kind="library-item"] button.btn:disabled').first();
   await expect(btn).toBeDisabled();
   await expect(btn).toContainText("Finish 5 books to unlock placement");
 });

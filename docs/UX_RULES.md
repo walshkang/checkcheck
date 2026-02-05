@@ -5,7 +5,7 @@ Phase 1 uses three primary surfaces:
 
 1. **Library**
    - Add items (search first; manual fallback), status (want/reading/finished)
-   - Two sub-views: **Want to read** (saved queue) and **Finished** (rated history)
+   - Three sub-views: **Want to read** (saved queue), **Unplaced** (finished but not yet rated), and **Finished** (rated history)
    - Browse + sort by stacked rating (when available)
 2. **Compare (“Mic check”)**
    - A wins / B wins / Skip / Undo

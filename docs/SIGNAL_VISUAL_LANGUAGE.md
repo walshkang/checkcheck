@@ -143,7 +143,7 @@ Rationale: Library is operational, not conceptual.
 
 * ❌ No illustration
 * ❌ No yellow dominance
-* ✅ Simple text: “Do 3 more comparisons”
+* ✅ Simple text: “Check”
 
 Rationale: This is micro‑adjustment, not calibration.
 
@@ -313,7 +313,7 @@ Use this audit to align existing screens with the Signal system.
 | ---------------------------- | ------------ | ----------------------- | ------------------------------------------------------------------------------------------- |
 | Library                      | Operational  | ❌ No                    | Keep plain. Remove any mic CTAs or illustrations. Text-only after-finish prompt is correct. |
 | Add Book                     | Operational  | ❌ No                    | No signal visuals. Focus on speed and clarity.                                              |
-| Finished Transition          | Transitional | ⚠️ Limited              | Text-first prompt only (“Do 3 more comparisons”). No illustration.                          |
+| Finished Transition          | Transitional | ⚠️ Limited              | Text-first prompt only (“Check”). No illustration.                                          |
 | After-Finish (3-step)        | Operational  | ❌ No                    | No illustration, no yellow dominance. Focus UI.                                             |
 | Mic Check Landing            | Conceptual   | ✅ Yes                   | Primary home of mic illustration + signal color.                                            |
 | Mic Check In-Progress        | Operational  | ❌ No                    | Strip visuals. Show progress only.                                                          |

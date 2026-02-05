@@ -68,15 +68,6 @@ function toneFromPercentile(p) {
 export function renderApp(state) {
   const { surface } = state;
   const navLibraryCurrent = surface === "library" ? ' aria-current="page"' : "";
-  const navCompareCurrent = surface === "compare" ? ' aria-current="page"' : "";
-  const decidedComparisonsCount =
-    typeof state.decidedComparisonsCount === "number"
-      ? state.decidedComparisonsCount
-      : state.comparisons.filter((c) => c.winner_item_id != null).length;
-  const showMicCheckNav = decidedComparisonsCount > 0 || (state.finishedIds?.length ?? 0) >= 5;
-  const compareBtn = showMicCheckNav
-    ? `<button class="pill" data-action="nav:compare"${navCompareCurrent}>Mic check</button>`
-    : "";
 
   return `
     <div class="topbar">
@@ -86,7 +77,6 @@ export function renderApp(state) {
       </div>
       <div class="nav">
         <button class="pill" data-action="nav:library"${navLibraryCurrent}>Library</button>
-        ${compareBtn}
       </div>
     </div>
     ${state.toast ? renderToast(state.toast) : ""}
@@ -153,16 +143,14 @@ function renderLibrary(state) {
     : "";
 
   const unplacedIds = Array.isArray(state.unplacedIds) ? state.unplacedIds : [];
-  const showUnplacedQueue = state.libraryView === "finished" && unplacedIds.length > 0;
-  const unplacedExpanded = !!state.unplacedExpanded;
-  const showUnplacedToggle = showUnplacedQueue && unplacedIds.length > 3;
-  const unplacedToShow = showUnplacedQueue ? (unplacedExpanded ? unplacedIds : unplacedIds.slice(0, 3)) : [];
   const canStartCompare = state.finishedIds.length >= 5;
   const isInitiated = decidedComparisonsCount > 0;
-  const unplacedSection = showUnplacedQueue
+
+  const unplacedHeader =
+    state.libraryView === "unplaced" && unplacedIds.length > 0
     ? `
-        <div data-kind="unplaced-queue" class="inlinePrompt" style="margin-bottom:12px;">
-          <div class="row" style="justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div data-kind="unplaced-header" class="inlinePrompt" style="margin-bottom:12px;">
+          <div class="row" style="justify-content:space-between; align-items:center; gap:10px;">
             <div class="stack" style="gap:2px;">
               <div class="title">Unplaced (${unplacedIds.length})</div>
               <div class="muted">${
@@ -170,41 +158,16 @@ function renderLibrary(state) {
                   ? "Finish 5 books to unlock placement."
                   : !isInitiated
                     ? "Unlock placement with one mic check decision."
-                    : "Place each finished book in 3 decided picks."
+                    : "Check each finished book in 3 picks."
               }</div>
             </div>
             ${
-              showUnplacedToggle
-                ? `<button class="link" type="button" data-action="unplaced:toggle">${unplacedExpanded ? "Hide" : "View all"}</button>`
-                : ""
+              !canStartCompare
+                ? `<button class="btn" type="button" disabled>Finish 5 books to unlock placement</button>`
+                : !isInitiated
+                  ? `<button class="btn primary" type="button" data-action="start:miccheck">Unlock placement (Mic check)</button>`
+                  : ""
             }
-          </div>
-          <div style="height:10px;"></div>
-          <div class="stack" style="gap:10px;">
-            ${unplacedToShow
-              .map((id) => {
-                const item = state.itemsById.get(id);
-                if (!item) return "";
-                const title = itemTitle(item);
-                const author = itemAuthor(item);
-                const cta = !canStartCompare
-                  ? `<button class="btn" type="button" disabled>Finish 5 books to unlock placement</button>`
-                  : !isInitiated
-                    ? `<button class="btn primary" type="button" data-action="start:miccheck">Unlock placement (Mic check)</button>`
-                    : `<button class="btn primary" type="button" data-action="start:focus" data-item-id="${escapeHtml(
-                        id
-                      )}">Do 3 more comparisons</button>`;
-                return `
-                  <div data-kind="unplaced-item" class="row" style="justify-content:space-between; gap:10px; align-items:center;">
-                    <div class="stack" style="gap:2px;">
-                      <div class="title">${title}</div>
-                      ${author ? `<div class="sub">${author}</div>` : ""}
-                    </div>
-                    ${cta}
-                  </div>
-                `;
-              })
-              .join("")}
           </div>
         </div>
       `
@@ -232,7 +195,8 @@ function renderLibrary(state) {
 
   const listRows = state.libraryRows.filter((row) => {
     if (row.entry.archived_at) return true;
-    if (state.libraryView === "finished") return row.entry.status === "finished";
+    if (state.libraryView === "unplaced") return row.entry.status === "finished" && row.derived?.stars_display == null;
+    if (state.libraryView === "finished") return row.entry.status === "finished" && row.derived?.stars_display != null;
     return row.entry.status === "want" || row.entry.status === "reading";
   });
 
@@ -242,19 +206,29 @@ function renderLibrary(state) {
 		      const isArchived = !!entry.archived_at;
 		      const isFinishedActive = entry.status === "finished" && !isArchived;
 		      const isRated = !!derived && derived.stars_display != null;
-		      const stars = isRated ? renderStars(derived.stars_display) : "";
-		      const rankScore =
-		        isRated && derived
+	      const stars = isRated ? renderStars(derived.stars_display) : "";
+	      const rankScore =
+	        isRated && derived
 		          ? `<div class="rankScore ${toneFromPercentile(derived.percentile)}">${escapeHtml(
 		              derived.rank_score_raw.toFixed(2)
 		            )} / 5.00</div>`
 		          : "";
 	      const ratingSlot =
-	        state.libraryView === "finished" && isFinishedActive && !isRated
+	        state.libraryView === "unplaced" && isFinishedActive && !isRated
 	          ? `<span class="chip">Not rated</span>`
 	          : stars
 	            ? `${stars}${rankScore}`
 	            : "";
+	      const unplacedCta =
+	        state.libraryView === "unplaced" && isFinishedActive && !isArchived
+	          ? !canStartCompare
+	            ? `<button class="btn" type="button" data-kind="unplaced-cta" disabled>Finish 5 books to unlock placement</button>`
+	            : !isInitiated
+		              ? `<button class="btn primary" type="button" data-kind="unplaced-cta" data-action="start:miccheck">Unlock placement (Mic check)</button>`
+		              : `<button class="btn primary" type="button" data-kind="unplaced-cta" data-action="start:focus" data-item-id="${escapeHtml(
+		                  item.id
+		                )}">Check</button>`
+		          : "";
 	      const showTypeChip =
 	        !isArchived &&
 	        state.libraryView === "want" &&
@@ -275,7 +249,9 @@ function renderLibrary(state) {
 	        : isFinishedActive
           ? isRated
             ? `${formatTopPct(derived.percentile)} · Based on ${derived.comparisons_count} comparisons`
-            : "Not rated yet — do a mic check."
+            : decidedComparisonsCount > 0
+              ? "Not rated yet — check it."
+              : "Not rated yet — do a mic check."
           : "Add a few finished books, then we’ll do a quick mic check to rank them.";
         const titlePrefix =
           state.libraryView === "finished" && isFinishedActive && isRated
@@ -283,17 +259,17 @@ function renderLibrary(state) {
             : "";
       const showFinishPrompt =
         state.finishPromptItemId === item.id && isFinishedActive && decidedComparisonsCount > 0;
-      const finishPrompt = showFinishPrompt
-        ? `
-            <div class="inlinePrompt">
-              <div class="muted">Want to tighten this?</div>
-              <div class="row" style="justify-content:flex-start; gap:10px; margin-top:6px;">
-                <button class="btn primary" type="button" data-action="start:focus" data-item-id="${escapeHtml(item.id)}">Do 3 more comparisons</button>
-                <button class="link" type="button" data-action="finishprompt:dismiss">Dismiss</button>
-              </div>
-            </div>
-          `
-        : "";
+	      const finishPrompt = showFinishPrompt
+	        ? `
+	            <div class="inlinePrompt">
+	              <div class="muted">Want to tighten this?</div>
+	              <div class="row" style="justify-content:flex-start; gap:10px; margin-top:6px;">
+	                <button class="btn primary" type="button" data-action="start:focus" data-item-id="${escapeHtml(item.id)}">Check</button>
+	                <button class="link" type="button" data-action="finishprompt:dismiss">Dismiss</button>
+	              </div>
+	            </div>
+	          `
+	        : "";
       return `
         <li class="list-item" data-kind="library-item" data-action="open:detail" data-item-id="${escapeHtml(item.id)}">
 	            <div class="row">
@@ -303,6 +279,7 @@ function renderLibrary(state) {
 		              <div class="sub">${escapeHtml(sub)}</div>
 		            </div>
 			            <div class="stack" style="align-items:flex-end; gap:8px;">
+			              ${unplacedCta}
 			              ${ratingSlot}
 			              ${quickFinish}
 			              ${typeChip}
@@ -336,22 +313,31 @@ function renderLibrary(state) {
 	              : ""
 	          }
 	        </div>
-		        <div class="row" style="justify-content:flex-start; gap:8px; margin-bottom:12px;">
+			        <div class="row" style="justify-content:flex-start; gap:8px; margin-bottom:12px;">
 		          <button class="pill" data-action="library:view" data-view="want"${state.libraryView === "want" ? ' aria-current="page"' : ""}>Want to read</button>
+		          <button class="pill" data-action="library:view" data-view="unplaced"${
+		            state.libraryView === "unplaced" ? ' aria-current="page"' : ""
+		          }>Unplaced${unplacedIds.length ? ` (${unplacedIds.length})` : ""}</button>
 		          <button class="pill" data-action="library:view" data-view="finished"${
 		            state.libraryView === "finished" ? ' aria-current="page"' : ""
 		          }>Finished</button>
 			        </div>
 			        ${onboardingBanner}
-			        ${unplacedSection}
+			        ${unplacedHeader}
 		        ${
 		          state.items.length === 0
 		            ? `<div class="muted">Add your first book to begin.</div>`
 		            : listRows.length === 0
-	              ? `<div class="muted">${
-	                  state.libraryView === "finished" ? "No finished books yet." : "No want-to-read books yet."
-	                }</div>`
-	              : `<ul class="list">${listItems}</ul>`
+		              ? `<div class="muted">${
+		                  state.libraryView === "unplaced"
+		                    ? "No unplaced books right now."
+		                    : state.libraryView === "finished"
+		                      ? unplacedIds.length
+		                        ? `No rated books yet. Place books in Unplaced (${unplacedIds.length}).`
+		                        : "No finished books yet."
+		                      : "No want-to-read books yet."
+		                }</div>`
+		              : `<ul class="list">${listItems}</ul>`
 	        }
 	      </div>
 	    </div>
@@ -452,13 +438,12 @@ function renderCompare(state) {
     state.compareEnterAt && Date.now() - state.compareEnterAt < 600 ? " enter" : "";
 
   if (!session) {
-    const canStart = state.finishedIds.length >= 5;
     return `
       <div class="card signalContainer" data-kind="miccheck-landing">
-        <h2>Mic check</h2>
-        <div class="muted">${canStart ? "Ten quick picks. Your shelf will snap into place." : "Add at least 5 finished books to begin."}</div>
+        <h2>Compare</h2>
+        <div class="muted">Start a mic check from your Library.</div>
         <div style="height:12px;"></div>
-        <button class="btn primary signalCTA" data-action="start:miccheck" ${canStart ? "" : "disabled"}>Start mic check</button>
+        <button class="btn" data-action="nav:library">Back to Library</button>
       </div>
     `;
   }
@@ -471,7 +456,7 @@ function renderCompare(state) {
         <div class="muted">Want to place another finished book?</div>
         <div style="height:12px;"></div>
         <div class="btns">
-          <button class="btn primary" data-action="after_finish:back_to_finished">Back to Finished</button>
+          <button class="btn primary" data-action="after_finish:back_to_finished">Back to Unplaced</button>
           <button class="btn" data-action="nav:library">Back to library</button>
         </div>
       </div>
@@ -708,8 +693,7 @@ function renderDetail(state) {
 	        }
 	        <button class="btn primary" data-action="start:focus" data-item-id="${escapeHtml(itemId)}" ${
 	          isActiveFinished && decidedComparisonsCount > 0 ? "" : "disabled"
-	        }>Do 3 more comparisons</button>
-	        <button class="btn" data-action="nav:compare">Mic check</button>
+	        }>Check</button>
 	      </div>
 	    </div>
 	  `;

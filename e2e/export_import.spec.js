@@ -61,10 +61,17 @@ test("Export -> wipe -> import restores library and comparisons", async ({ page 
   ]);
   await chooser.setFiles(outPath);
 
-  // After import, both items should be visible again.
-  await setLibraryView(page, "finished");
-  await expect(page.locator('.list-item[data-kind="library-item"]', { hasText: "Exported" })).toBeVisible();
-  await expect(page.locator('.list-item[data-kind="library-item"]', { hasText: "Imported" })).toBeVisible();
+  // After import, items should be visible again (either Unplaced or Finished, depending on which were bootstrapped).
+  async function expectVisibleInShelf(title) {
+    await setLibraryView(page, "unplaced");
+    const inUnplaced = page.locator('.list-item[data-kind="library-item"]').filter({ hasText: title }).first();
+    if ((await inUnplaced.count()) && (await inUnplaced.isVisible())) return;
+    await setLibraryView(page, "finished");
+    await expect(page.locator('.list-item[data-kind="library-item"]', { hasText: title })).toBeVisible();
+  }
+
+  await expectVisibleInShelf("Exported");
+  await expectVisibleInShelf("Imported");
 
   // And footer should reflect at least 1 comparison.
   await expect(page.getByText(/Comparisons:\s*[1-9]/)).toBeVisible();

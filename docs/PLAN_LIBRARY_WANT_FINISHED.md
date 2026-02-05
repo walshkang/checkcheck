@@ -7,9 +7,10 @@ Last updated: 2026-02-04
 Make the Library mental model crisp:
 
 - **Want to Read** = saved queue (lightweight, no scores)
+- **Unplaced** = finished but not yet rated (needs comparisons)
 - **Finished** = rated history (scored + ranked)
 - **Calibration** (“Mic check”) becomes an **initiation moment** prompted at **5 active finished** books, while Compare remains available as a utility surface.
-- **After-finish placement** remains the default loop (“Do 3 more comparisons”).
+- **After-finish placement** remains the default loop (“Check”).
 
 ## Scope (Phase 1 / Shippable Slice)
 
@@ -31,7 +32,6 @@ Make the Library mental model crisp:
 
 ## Non-goals (Phase 1)
 
-- Removing the top-level **Mic check** nav surface
 - Changing scoring, curve, hysteresis, or ranking mechanics
 - Adding new data fields (notes, tags, sources) beyond what already exists in this slice
 
@@ -43,7 +43,7 @@ Note: Want-to-read enrichment (suggested type + tags) is specified separately in
 
 - Add book → appears in `Want`
 - Toggle to `Finished` → does not show want items
-- Mark a want item finished → moves to `Finished` and shows “Do 3 more comparisons” prompt
+- Mark a want item finished → moves to `Unplaced` and shows “Check” prompt
 - At 5 active finished + 0 decided comps → `Finished` shows calibration banner
 - After 1 decided comparison → banner no longer appears
 

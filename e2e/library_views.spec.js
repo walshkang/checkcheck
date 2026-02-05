@@ -22,10 +22,10 @@ test("Library Want/Finished sub-views reflect status membership", async ({ page 
   await expect(rowWant.locator('button.chip.icon[data-action="quick:finish"]')).toBeVisible();
   await rowWant.locator('button.chip.icon[data-action="quick:finish"]').click();
 
-  await setLibraryView(page, "finished");
+  await setLibraryView(page, "unplaced");
   await expect(page.locator('.list-item[data-kind="library-item"]', { hasText: "Queue Book" })).toBeVisible();
 
-  // Finished view should not allow one-click "move back" via quick status toggle.
-  const row = page.locator('.list-item[data-kind="library-item"]', { hasText: "Queue Book" }).first();
-  await expect(row.locator('button.chip[data-action="quick:status"]')).toHaveCount(0);
+  // Finished view should not contain unplaced items.
+  await setLibraryView(page, "finished");
+  await expect(page.locator('.list-item[data-kind="library-item"]', { hasText: "Queue Book" })).toHaveCount(0);
 });

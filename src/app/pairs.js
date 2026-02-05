@@ -103,6 +103,7 @@ export function pickPair({
   comparisons,
   derivedById,
   mode = "mic_check",
+  isInitial = false,
   targetId = null,
   stepIndex = 0,
   usedOpponentIds = null,
@@ -130,6 +131,23 @@ export function pickPair({
     return { a, b };
   }
 
+  function pickCoveragePair() {
+    const scored = finishedIds
+      .map((id) => ({ id, c: derivedById?.get(id)?.comparisons_count ?? 0 }))
+      .sort((a, b) => (a.c - b.c) || (a.id < b.id ? -1 : 1));
+    if (scored.length < 2) return null;
+
+    const minC = scored[0].c;
+    const mins = scored.filter((x) => x.c === minC).map((x) => x.id);
+    const a = randomPick(mins);
+
+    const opponentPool = scored.filter((x) => x.id !== a).map((x) => x.id);
+    for (const b of opponentPool) {
+      if (!isRecent(a, b)) return { a, b };
+    }
+    return opponentPool.length ? { a, b: opponentPool[0] } : null;
+  }
+
   if (mode === "after_finish" && targetId && finishedIds.includes(targetId)) {
     const used = usedOpponentIds instanceof Set ? usedOpponentIds : new Set(usedOpponentIds || []);
     let candidates = finishedIds.filter((id) => id !== targetId && !used.has(id));
@@ -146,6 +164,13 @@ export function pickPair({
     // Deterministic side swap to reduce "always left" bias.
     const flip = stepIndex % 2 === 1;
     return flip ? { a: opponent, b: targetId } : { a: targetId, b: opponent };
+  }
+
+  // Initial mic check: bias hard toward coverage so every finished item is likely
+  // to appear at least once (avoids "still unplaced after ranking" confusion).
+  if (mode === "mic_check" && isInitial) {
+    const p = pickCoveragePair();
+    if (p) return p;
   }
 
   // Day-1 rule:

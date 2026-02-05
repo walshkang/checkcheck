@@ -45,7 +45,7 @@ test("Search add intent: existing want + add as finished promotes status", async
 
   // Promote to finished via intent.
   await result.locator('[data-action="search:add"][data-target-status="finished"]').click();
-  await setLibraryView(page, "finished");
+  await setLibraryView(page, "unplaced");
   await expect(getRowByTitle(page, "Upgrade Me")).toBeVisible();
 });
 
@@ -69,7 +69,7 @@ test("Search add intent: archived + add as finished restores and promotes", asyn
   await page.locator('.topbar [data-action="nav:library"]').click();
   await result.locator('[data-action="search:add"][data-target-status="finished"]').click();
 
-  await setLibraryView(page, "finished");
+  await setLibraryView(page, "unplaced");
   const active = getRowByTitle(page, "Upgrade Me");
   await expect(active).toBeVisible();
   await expect(active).not.toContainText("Archived");

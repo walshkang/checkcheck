@@ -2,7 +2,6 @@ import { CURVE_VERSION } from "../rating/curve_v1.js";
 import { recomputeDerived } from "../rating/recompute.js";
 import * as idb from "../storage/idb.js";
 import { pickPair } from "./pairs.js";
-import { computePlacedAtByItemId } from "./placement.js";
 import { renderApp } from "./render.js";
 import { searchOpenLibrary } from "./catalog/openlibrary.js";
 import { mapSubjectsToTypeSuggested } from "./catalog/type_mapping.js";
@@ -38,10 +37,10 @@ export async function startApp() {
   const searchParam = qs.get("search");
   const searchEnabled = !(searchParam === "0" || searchParam === "false" || searchParam === "off");
 
-	  const state = {
-	    surface: "library",
-	    items: [],
-	    itemsById: new Map(),
+		  const state = {
+		    surface: "library",
+		    items: [],
+		    itemsById: new Map(),
 	    libraryEntries: [],
 	    libraryByItemId: new Map(),
 	    comparisons: [],
@@ -54,10 +53,7 @@ export async function startApp() {
 	    scoredIds: [],
 	    libraryRows: [],
 	    decidedComparisonsCount: 0,
-	    placementUnlocked: false,
-	    placedAtByItemId: new Map(),
 	    unplacedIds: [],
-	    unplacedExpanded: false,
 
 	    detailItemId: null,
 	    session: null,
@@ -65,7 +61,7 @@ export async function startApp() {
 		    toast: null,
 
 	    showArchived: false,
-	    libraryView: "want", // want | finished
+	    libraryView: "want", // want | unplaced | finished
 
 	    finishPromptItemId: null,
 	    finishPromptToken: null,
@@ -146,8 +142,6 @@ export async function startApp() {
 	      .map((e) => e.item_id);
 
 	    state.decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
-	    state.placementUnlocked = state.finishedIds.length >= 5 && state.decidedComparisonsCount > 0;
-	    state.placedAtByItemId = computePlacedAtByItemId(state.comparisons);
 
 	    state.scoredIds = state.finishedIds.filter((id) => state.derivedById.get(id)?.is_scored);
 
@@ -178,11 +172,15 @@ export async function startApp() {
 	        };
 	      });
 
-	    // Unplaced is derived from finished items minus placed sessions (computed from comparisons).
+	    // Unplaced is derived from finished items that do not yet have a displayed rating.
 	    // Order matches the Finished list order (stable + defensible for e2e).
 	    state.unplacedIds = finishedRows
 	      .map((r) => r?.item?.id)
-	      .filter((id) => !!id && !state.placedAtByItemId?.has(id));
+	      .filter((id) => {
+	        if (!id) return false;
+	        const d = state.derivedById.get(id);
+	        return !(d?.is_rated ?? false);
+	      });
 
 	    const other = state.libraryEntries
 	      .filter((e) => e.status !== "finished" && !e.archived_at)
@@ -245,15 +243,16 @@ export async function startApp() {
 	      }
 	    }
 	    state.currentPair = pickPair({
-      finishedIds: state.finishedIds,
-      comparisons: activeComparisons,
-      derivedById: state.derivedById,
-      mode: state.session.mode,
-      targetId: state.session.target_item_id,
-      stepIndex,
-      usedOpponentIds
-    });
-  }
+	      finishedIds: state.finishedIds,
+	      comparisons: activeComparisons,
+	      derivedById: state.derivedById,
+	      mode: state.session.mode,
+      isInitial: !!state.session.is_initial,
+	      targetId: state.session.target_item_id,
+	      stepIndex,
+	      usedOpponentIds
+	    });
+	  }
 
   function render() {
     rebuildSelectors();
@@ -364,7 +363,7 @@ export async function startApp() {
     await handlePatchEntry(itemId, { tags: next });
   }
 
-	  async function handleAddItem(form, submitter = null) {
+		  async function handleAddItem(form, submitter = null) {
 	    const fd = new FormData(form);
 	    const title = String(fd.get("title") || "").trim();
 	    const author = String(fd.get("author") || "").trim();
@@ -381,14 +380,14 @@ export async function startApp() {
 	    state.libraryEntries.push(entry);
 	    state.libraryByItemId.set(item.id, entry);
 
-	    form.reset();
-	    if (intent === "finished") {
-	      state.libraryView = "finished";
-	      await handleSetStatus(item.id, "finished");
-	      return;
-	    }
-	    render();
-	  }
+		    form.reset();
+		    if (intent === "finished") {
+		      state.libraryView = "unplaced";
+		      await handleSetStatus(item.id, "finished");
+		      return;
+		    }
+		    render();
+		  }
 
   async function handleSearchOpenLibrary(form) {
     if (!state.searchEnabled) return;
@@ -436,7 +435,7 @@ export async function startApp() {
     return `${String(title || "").trim().toLowerCase()}|${String(author || "").trim().toLowerCase()}`;
   }
 
-	  async function handleAddFromSearch(idx, targetStatus = "want") {
+		  async function handleAddFromSearch(idx, targetStatus = "want") {
 	    const r = state.searchResults[idx];
 	    if (!r) return;
 	    const intent = targetStatus === "finished" ? "finished" : "want";
@@ -448,20 +447,20 @@ export async function startApp() {
 	      );
 	      if (existing) {
 	        const entry = state.libraryByItemId.get(existing.id);
-	        if (entry?.archived_at) {
-	          await handleRestore(existing.id);
-	          if (intent === "finished" && entry?.status !== "finished") {
-	            state.libraryView = "finished";
-	            await handleSetStatus(existing.id, "finished");
-	          }
-	          return;
-	        }
-	        if (intent === "finished" && entry?.status !== "finished") {
-	          state.libraryView = "finished";
-	          await handleSetStatus(existing.id, "finished");
-	          setToast("Marked finished.", { hint: "Ready to place when you are." });
-	          return;
-	        }
+		        if (entry?.archived_at) {
+		          await handleRestore(existing.id);
+		          if (intent === "finished" && entry?.status !== "finished") {
+		            state.libraryView = "unplaced";
+		            await handleSetStatus(existing.id, "finished");
+		          }
+		          return;
+		        }
+		        if (intent === "finished" && entry?.status !== "finished") {
+		          state.libraryView = "unplaced";
+		          await handleSetStatus(existing.id, "finished");
+		          setToast("Marked finished.", { hint: "Ready to place when you are." });
+		          return;
+		        }
 	        setToast("Already in your library.", { hint: "Relative to your library." });
 	        return;
 	      }
@@ -472,20 +471,20 @@ export async function startApp() {
 	      const existing = state.items.find((it) => normalizeKey(it.title, it.author) === key);
 	      if (existing) {
 	        const entry = state.libraryByItemId.get(existing.id);
-	        if (entry?.archived_at) {
-	          await handleRestore(existing.id);
-	          if (intent === "finished" && entry?.status !== "finished") {
-	            state.libraryView = "finished";
-	            await handleSetStatus(existing.id, "finished");
-	          }
-	          return;
-	        }
-	        if (intent === "finished" && entry?.status !== "finished") {
-	          state.libraryView = "finished";
-	          await handleSetStatus(existing.id, "finished");
-	          setToast("Marked finished.", { hint: "Ready to place when you are." });
-	          return;
-	        }
+		        if (entry?.archived_at) {
+		          await handleRestore(existing.id);
+		          if (intent === "finished" && entry?.status !== "finished") {
+		            state.libraryView = "unplaced";
+		            await handleSetStatus(existing.id, "finished");
+		          }
+		          return;
+		        }
+		        if (intent === "finished" && entry?.status !== "finished") {
+		          state.libraryView = "unplaced";
+		          await handleSetStatus(existing.id, "finished");
+		          setToast("Marked finished.", { hint: "Ready to place when you are." });
+		          return;
+		        }
 	        setToast("Already in your library.", { hint: "Try a different edition or spelling." });
 	        return;
 	      }
@@ -509,13 +508,13 @@ export async function startApp() {
 	    render();
 	    setToast("Added.", { hint: "Ratings are relative to your library." });
 
-	    if (intent === "finished") {
-	      state.libraryView = "finished";
-	      await handleSetStatus(item.id, "finished");
-	    }
-	  }
+		    if (intent === "finished") {
+		      state.libraryView = "unplaced";
+		      await handleSetStatus(item.id, "finished");
+		    }
+		  }
 
-	  async function handleSetStatus(itemId, status) {
+		  async function handleSetStatus(itemId, status) {
 	    const prev = state.libraryByItemId.get(itemId);
 	    const entry = await idb.setLibraryStatus(itemId, status);
 	    state.libraryByItemId.set(itemId, entry);
@@ -523,9 +522,9 @@ export async function startApp() {
 	    if (idx >= 0) state.libraryEntries[idx] = entry;
 	    else state.libraryEntries.push(entry);
 
-	    const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
-	    if (entry.status === "finished" && !entry.archived_at && decidedComparisonsCount > 0) state.libraryView = "finished";
-	    if (entry.status === "want" || entry.status === "reading") state.libraryView = "want";
+		    const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
+		    if (entry.status === "finished" && !entry.archived_at && decidedComparisonsCount > 0) state.libraryView = "unplaced";
+		    if (entry.status === "want" || entry.status === "reading") state.libraryView = "want";
 
 	    // When the user marks an item finished, show a temporary inline prompt to do 3 comparisons.
 	    if (prev?.status !== "finished" && entry.status === "finished" && !entry.archived_at) {
@@ -703,19 +702,12 @@ export async function startApp() {
 	    if (state.comparePending && (action === "compare:win" || action === "compare:skip" || action === "compare:undo")) return;
 
 	    if (action === "nav:library") return setSurface("library"), render();
-	    if (action === "nav:compare") return setSurface("compare"), render();
 	    if (action === "export") return void handleExport().catch((e) => alert(String(e)));
 
 		    if (action === "library:view") {
 		      const view = el.getAttribute("data-view");
-		      if (view !== "want" && view !== "finished") return;
+		      if (view !== "want" && view !== "unplaced" && view !== "finished") return;
 		      state.libraryView = view;
-		      render();
-		      return;
-		    }
-
-		    if (action === "unplaced:toggle") {
-		      state.unplacedExpanded = !state.unplacedExpanded;
 		      render();
 		      return;
 		    }
@@ -780,7 +772,7 @@ export async function startApp() {
 
 		    if (action === "after_finish:back_to_finished") {
 		      setSurface("library");
-		      state.libraryView = "finished";
+		      state.libraryView = "unplaced";
 		      render();
 		      return;
 		    }

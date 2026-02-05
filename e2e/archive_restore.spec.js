@@ -25,13 +25,19 @@ test("Archive hides item from library + removes from scoring pool; restore bring
   await startMicCheck(page);
   await winA(page);
   await page.locator('.topbar [data-action="nav:library"]').click();
-  await setLibraryView(page, "finished");
+  await setLibraryView(page, "unplaced");
 
-  const betaRow = page
-    .locator('.list-item[data-kind="library-item"]')
-    .filter({ hasText: "Beta" })
-    .first();
-  await expect(betaRow).toBeVisible();
+  async function getActiveRow(title) {
+    await setLibraryView(page, "unplaced");
+    const inUnplaced = page.locator('.list-item[data-kind="library-item"]').filter({ hasText: title }).first();
+    if ((await inUnplaced.count()) && (await inUnplaced.isVisible())) return inUnplaced;
+    await setLibraryView(page, "finished");
+    const inFinished = page.locator('.list-item[data-kind="library-item"]').filter({ hasText: title }).first();
+    await expect(inFinished).toBeVisible();
+    return inFinished;
+  }
+
+  const betaRow = await getActiveRow("Beta");
   const betaId = await betaRow.getAttribute("data-item-id");
   expect(betaId).toBeTruthy();
 
@@ -40,12 +46,12 @@ test("Archive hides item from library + removes from scoring pool; restore bring
   await expect(page.getByText(/detail/i)).toBeVisible();
   await page.locator('[data-action="item:archive"]').click();
   await page.locator('.topbar [data-action="nav:library"]').click();
-  await setLibraryView(page, "finished");
 
-  // Hidden by default.
-  await expect(
-    page.locator('.list-item[data-kind="library-item"]').filter({ hasText: "Beta" })
-  ).toHaveCount(0);
+  // Hidden by default (in both Unplaced and Finished).
+  await setLibraryView(page, "unplaced");
+  await expect(page.locator('.list-item[data-kind="library-item"]').filter({ hasText: "Beta" })).toHaveCount(0);
+  await setLibraryView(page, "finished");
+  await expect(page.locator('.list-item[data-kind="library-item"]').filter({ hasText: "Beta" })).toHaveCount(0);
 
   // Export and confirm archived_at persists on library_entries.
   const [download] = await Promise.all([
@@ -74,7 +80,6 @@ test("Archive hides item from library + removes from scoring pool; restore bring
   await page.locator('.topbar [data-action="nav:library"]').click();
 
   // Back in active list.
-  await expect(
-    page.locator('.list-item[data-kind="library-item"]').filter({ hasText: "Beta" })
-  ).toHaveCount(1);
+  const restored = await getActiveRow("Beta");
+  await expect(restored).toBeVisible();
 });

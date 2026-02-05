@@ -65,7 +65,7 @@ Avoid:
   - “Relative to your library.”
 
 ### Trust tools
-- “Do 3 more comparisons”
+- “Check”
 - “Re-run mic check”
 - “Reset display (keeps comparisons)” (if you offer it)
 
