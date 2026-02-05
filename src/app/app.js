@@ -2,6 +2,7 @@ import { CURVE_VERSION } from "../rating/curve_v1.js";
 import { recomputeDerived } from "../rating/recompute.js";
 import * as idb from "../storage/idb.js";
 import { pickPair } from "./pairs.js";
+import { computePlacedAtByItemId } from "./placement.js";
 import { renderApp } from "./render.js";
 import { searchOpenLibrary } from "./catalog/openlibrary.js";
 import { mapSubjectsToTypeSuggested } from "./catalog/type_mapping.js";
@@ -37,26 +38,31 @@ export async function startApp() {
   const searchParam = qs.get("search");
   const searchEnabled = !(searchParam === "0" || searchParam === "false" || searchParam === "off");
 
-  const state = {
-    surface: "library",
-    items: [],
-    itemsById: new Map(),
-    libraryEntries: [],
-    libraryByItemId: new Map(),
-    comparisons: [],
-    uiStarsDisplayById: {},
+	  const state = {
+	    surface: "library",
+	    items: [],
+	    itemsById: new Map(),
+	    libraryEntries: [],
+	    libraryByItemId: new Map(),
+	    comparisons: [],
+	    uiStarsDisplayById: {},
 
-    derivedById: new Map(),
-    rankById: new Map(),
-    finishedIds: [], // active finished (archived excluded)
-    archivedIds: [],
-    scoredIds: [],
-    libraryRows: [],
+	    derivedById: new Map(),
+	    rankById: new Map(),
+	    finishedIds: [], // active finished (archived excluded)
+	    archivedIds: [],
+	    scoredIds: [],
+	    libraryRows: [],
+	    decidedComparisonsCount: 0,
+	    placementUnlocked: false,
+	    placedAtByItemId: new Map(),
+	    unplacedIds: [],
+	    unplacedExpanded: false,
 
-    detailItemId: null,
-    session: null,
-    currentPair: null,
-	    toast: null,
+	    detailItemId: null,
+	    session: null,
+	    currentPair: null,
+		    toast: null,
 
 	    showArchived: false,
 	    libraryView: "want", // want | finished
@@ -132,19 +138,23 @@ export async function startApp() {
     await idb.setStarsDisplayState(nextStars);
   }
 
-  function rebuildSelectors() {
-    state.archivedIds = state.libraryEntries.filter((e) => !!e.archived_at).map((e) => e.item_id);
+	  function rebuildSelectors() {
+	    state.archivedIds = state.libraryEntries.filter((e) => !!e.archived_at).map((e) => e.item_id);
 
-    state.finishedIds = state.libraryEntries
-      .filter((e) => e.status === "finished" && !e.archived_at)
-      .map((e) => e.item_id);
+	    state.finishedIds = state.libraryEntries
+	      .filter((e) => e.status === "finished" && !e.archived_at)
+	      .map((e) => e.item_id);
 
-    state.scoredIds = state.finishedIds.filter((id) => state.derivedById.get(id)?.is_scored);
+	    state.decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
+	    state.placementUnlocked = state.finishedIds.length >= 5 && state.decidedComparisonsCount > 0;
+	    state.placedAtByItemId = computePlacedAtByItemId(state.comparisons);
+
+	    state.scoredIds = state.finishedIds.filter((id) => state.derivedById.get(id)?.is_scored);
 
     // List order: finished first by rank_score_raw desc; then non-finished by created_at desc.
-    const finishedRows = state.finishedIds
-      .slice()
-      .sort((a, b) => {
+	    const finishedRows = state.finishedIds
+	      .slice()
+	      .sort((a, b) => {
         const da = state.derivedById.get(a);
         const db = state.derivedById.get(b);
         const ratedA = da?.is_rated ? 1 : 0;
@@ -156,21 +166,27 @@ export async function startApp() {
         if (ra > rb) return -1;
         if (ra < rb) return 1;
         return a < b ? -1 : 1;
-      })
-      .map((id) => {
-        const item = state.itemsById.get(id);
-        const entry = state.libraryByItemId.get(id);
-        return {
-          item,
-          entry,
-          derived: state.derivedById.get(id) ?? null,
-          rank: state.rankById.get(id) ?? null
-        };
-      });
+	      })
+	      .map((id) => {
+	        const item = state.itemsById.get(id);
+	        const entry = state.libraryByItemId.get(id);
+	        return {
+	          item,
+	          entry,
+	          derived: state.derivedById.get(id) ?? null,
+	          rank: state.rankById.get(id) ?? null
+	        };
+	      });
 
-    const other = state.libraryEntries
-      .filter((e) => e.status !== "finished" && !e.archived_at)
-      .map((e) => ({ entry: e, item: state.itemsById.get(e.item_id) }))
+	    // Unplaced is derived from finished items minus placed sessions (computed from comparisons).
+	    // Order matches the Finished list order (stable + defensible for e2e).
+	    state.unplacedIds = finishedRows
+	      .map((r) => r?.item?.id)
+	      .filter((id) => !!id && !state.placedAtByItemId?.has(id));
+
+	    const other = state.libraryEntries
+	      .filter((e) => e.status !== "finished" && !e.archived_at)
+	      .map((e) => ({ entry: e, item: state.itemsById.get(e.item_id) }))
       .sort((a, b) => {
         const ca = a.entry?.created_at ?? "";
         const cb = b.entry?.created_at ?? "";
@@ -194,8 +210,8 @@ export async function startApp() {
           .map(({ item, entry }) => ({ item, entry, derived: null, rank: null }))
       : [];
 
-    state.libraryRows = [...finishedRows, ...other, ...archived].filter((r) => r.item && r.entry);
-  }
+	    state.libraryRows = [...finishedRows, ...other, ...archived].filter((r) => r.item && r.entry);
+	  }
 
   function setSurface(surface) {
     state.surface = surface;
@@ -206,26 +222,29 @@ export async function startApp() {
     }
   }
 
-  function updateCurrentPair() {
-    if (!state.session) {
-      state.currentPair = null;
-      return;
-    }
-    const activeSet = new Set(state.finishedIds);
-    const activeComparisons = state.comparisons.filter(
-      (c) => activeSet.has(c.item_a_id) && activeSet.has(c.item_b_id)
-    );
-    const sessionComparisons = state.comparisons.filter((c) => c.session_id === state.session.session_id);
-    const stepIndex = sessionComparisons.length;
-    const usedOpponentIds = new Set();
-    const targetId = state.session.target_item_id;
-    if (targetId) {
-      for (const c of sessionComparisons) {
-        if (c.item_a_id === targetId) usedOpponentIds.add(c.item_b_id);
-        if (c.item_b_id === targetId) usedOpponentIds.add(c.item_a_id);
-      }
-    }
-    state.currentPair = pickPair({
+	  function updateCurrentPair() {
+	    if (!state.session) {
+	      state.currentPair = null;
+	      return;
+	    }
+	    const activeSet = new Set(state.finishedIds);
+	    const activeComparisons = state.comparisons.filter(
+	      (c) => activeSet.has(c.item_a_id) && activeSet.has(c.item_b_id)
+	    );
+	    const sessionComparisons = state.comparisons.filter((c) => c.session_id === state.session.session_id);
+	    const stepIndex =
+	      state.session.mode === "after_finish"
+	        ? sessionComparisons.filter((c) => c.winner_item_id != null).length
+	        : sessionComparisons.length;
+	    const usedOpponentIds = new Set();
+	    const targetId = state.session.target_item_id;
+	    if (targetId) {
+	      for (const c of sessionComparisons) {
+	        if (c.item_a_id === targetId) usedOpponentIds.add(c.item_b_id);
+	        if (c.item_b_id === targetId) usedOpponentIds.add(c.item_a_id);
+	      }
+	    }
+	    state.currentPair = pickPair({
       finishedIds: state.finishedIds,
       comparisons: activeComparisons,
       derivedById: state.derivedById,
@@ -657,13 +676,19 @@ export async function startApp() {
 	    if (action === "nav:compare") return setSurface("compare"), render();
 	    if (action === "export") return void handleExport().catch((e) => alert(String(e)));
 
-	    if (action === "library:view") {
-	      const view = el.getAttribute("data-view");
-	      if (view !== "want" && view !== "finished") return;
-	      state.libraryView = view;
-	      render();
-	      return;
-	    }
+		    if (action === "library:view") {
+		      const view = el.getAttribute("data-view");
+		      if (view !== "want" && view !== "finished") return;
+		      state.libraryView = view;
+		      render();
+		      return;
+		    }
+
+		    if (action === "unplaced:toggle") {
+		      state.unplacedExpanded = !state.unplacedExpanded;
+		      render();
+		      return;
+		    }
 
 	    if (action === "import:open") {
 	      const input = document.createElement("input");
@@ -686,8 +711,8 @@ export async function startApp() {
 	      return;
 	    }
 
-	    const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
-	    const canStartCompare = state.finishedIds.length >= 5;
+		    const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
+		    const canStartCompare = state.finishedIds.length >= 5;
 
 	    if (action === "start:miccheck") {
 	      if (!canStartCompare) {
@@ -705,19 +730,30 @@ export async function startApp() {
 	      return startSession({ stepsTotal: Number.isFinite(steps) ? steps : 5, mode: "mic_check" });
 	    }
 
-	    if (action === "start:focus") {
-	      if (decidedComparisonsCount === 0) {
-	        setToast("Do a mic check first.", { hint: "Your shelf calibrates from comparisons." });
-	        return;
-	      }
-	      const itemId = el.getAttribute("data-item-id");
-	      if (!itemId) return;
+		    if (action === "start:focus") {
+		      if (!canStartCompare) {
+		        setToast("Finish 5 books to unlock placement.", { hint: "We need a few finished books before comparisons." });
+		        return;
+		      }
+		      if (decidedComparisonsCount === 0) {
+		        setToast("Do a mic check first.", { hint: "Your shelf calibrates from comparisons." });
+		        return;
+		      }
+		      const itemId = el.getAttribute("data-item-id");
+		      if (!itemId) return;
 	      if (state.finishPromptItemId === itemId) {
 	        state.finishPromptItemId = null;
 	        state.finishPromptToken = null;
       }
-      return startSession({ stepsTotal: 3, mode: "after_finish", targetItemId: itemId });
-    }
+	      return startSession({ stepsTotal: 3, mode: "after_finish", targetItemId: itemId });
+	    }
+
+		    if (action === "after_finish:back_to_finished") {
+		      setSurface("library");
+		      state.libraryView = "finished";
+		      render();
+		      return;
+		    }
 
     if (action === "compare:win") {
       const winner = el.getAttribute("data-winner");

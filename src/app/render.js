@@ -122,7 +122,10 @@ function renderLibrary(state) {
   const addLabel = empty ? "Add your first book" : "Add book";
   const searchPanel = renderSearchPanel(state);
   const archivedCount = state.archivedIds?.length ?? 0;
-  const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
+  const decidedComparisonsCount =
+    typeof state.decidedComparisonsCount === "number"
+      ? state.decidedComparisonsCount
+      : state.comparisons.filter((c) => c.winner_item_id != null).length;
   const showInitiationBanner = state.libraryView === "finished" && state.finishedIds.length >= 5 && decidedComparisonsCount === 0;
   const initiationBanner = showInitiationBanner
     ? `
@@ -133,6 +136,64 @@ function renderLibrary(state) {
           <button class="btn primary" type="button" data-action="start:miccheck">Start mic check</button>
         </div>
         <div style="height:12px;"></div>
+      `
+    : "";
+
+  const unplacedIds = Array.isArray(state.unplacedIds) ? state.unplacedIds : [];
+  const showUnplacedQueue = state.libraryView === "finished" && unplacedIds.length > 0;
+  const unplacedExpanded = !!state.unplacedExpanded;
+  const showUnplacedToggle = showUnplacedQueue && unplacedIds.length > 3;
+  const unplacedToShow = showUnplacedQueue ? (unplacedExpanded ? unplacedIds : unplacedIds.slice(0, 3)) : [];
+  const canStartCompare = state.finishedIds.length >= 5;
+  const isInitiated = decidedComparisonsCount > 0;
+  const unplacedSection = showUnplacedQueue
+    ? `
+        <div data-kind="unplaced-queue" class="inlinePrompt" style="margin-bottom:12px;">
+          <div class="row" style="justify-content:space-between; align-items:flex-start; gap:10px;">
+            <div class="stack" style="gap:2px;">
+              <div class="title">Unplaced (${unplacedIds.length})</div>
+              <div class="muted">${
+                !canStartCompare
+                  ? "Finish 5 books to unlock placement."
+                  : !isInitiated
+                    ? "Unlock placement with one mic check decision."
+                    : "Place each finished book in 3 decided picks."
+              }</div>
+            </div>
+            ${
+              showUnplacedToggle
+                ? `<button class="link" type="button" data-action="unplaced:toggle">${unplacedExpanded ? "Hide" : "View all"}</button>`
+                : ""
+            }
+          </div>
+          <div style="height:10px;"></div>
+          <div class="stack" style="gap:10px;">
+            ${unplacedToShow
+              .map((id) => {
+                const item = state.itemsById.get(id);
+                if (!item) return "";
+                const title = itemTitle(item);
+                const author = itemAuthor(item);
+                const cta = !canStartCompare
+                  ? `<button class="btn" type="button" disabled>Finish 5 books to unlock placement</button>`
+                  : !isInitiated
+                    ? `<button class="btn primary" type="button" data-action="start:miccheck">Unlock placement (Mic check)</button>`
+                    : `<button class="btn primary" type="button" data-action="start:focus" data-item-id="${escapeHtml(
+                        id
+                      )}">Do 3 more comparisons</button>`;
+                return `
+                  <div data-kind="unplaced-item" class="row" style="justify-content:space-between; gap:10px; align-items:center;">
+                    <div class="stack" style="gap:2px;">
+                      <div class="title">${title}</div>
+                      ${author ? `<div class="sub">${author}</div>` : ""}
+                    </div>
+                    ${cta}
+                  </div>
+                `;
+              })
+              .join("")}
+          </div>
+        </div>
       `
     : "";
 
@@ -222,9 +283,9 @@ function renderLibrary(state) {
     .join("");
 
   return `
-	    <div class="grid">
-	      <div class="card">
-	        <h2>Library</h2>
+		    <div class="grid">
+		      <div class="card">
+		        <h2>Add books</h2>
 	        ${
 	          empty
 	            ? `<div class="muted" style="margin-bottom:12px;">Mic check your taste. Add a few books you’ve read. Then we’ll do a quick mic check to rank them.</div>`
@@ -255,12 +316,13 @@ function renderLibrary(state) {
 	          <button class="pill" data-action="library:view" data-view="finished"${
 	            state.libraryView === "finished" ? ' aria-current="page"' : ""
 	          }>Finished</button>
-	        </div>
-	        ${initiationBanner}
-	        ${
-	          state.items.length === 0
-	            ? `<div class="muted">Add your first book to begin.</div>`
-	            : listRows.length === 0
+		        </div>
+		        ${initiationBanner}
+		        ${unplacedSection}
+		        ${
+		          state.items.length === 0
+		            ? `<div class="muted">Add your first book to begin.</div>`
+		            : listRows.length === 0
 	              ? `<div class="muted">${
 	                  state.libraryView === "finished" ? "No finished books yet." : "No want-to-read books yet."
 	                }</div>`
@@ -346,7 +408,11 @@ function renderSearchPanel(state) {
 
 function renderCompare(state) {
   const { session } = state;
-  const stepsDone = session ? state.comparisons.filter((c) => c.session_id === session.session_id).length : 0;
+  const sessionComparisons = session ? state.comparisons.filter((c) => c.session_id === session.session_id) : [];
+  const stepsDone =
+    session?.mode === "after_finish"
+      ? sessionComparisons.filter((c) => c.winner_item_id != null).length
+      : sessionComparisons.length;
   const stepsTotal = session?.steps_total ?? 10;
   const stepsLeft = Math.max(0, stepsTotal - stepsDone);
   const isPending = !!state.comparePending;
@@ -362,6 +428,21 @@ function renderCompare(state) {
         <div class="muted">${canStart ? "Ten quick picks. Your shelf will snap into place." : "Add at least 5 finished books to begin."}</div>
         <div style="height:12px;"></div>
         <button class="btn primary signalCTA" data-action="start:miccheck" ${canStart ? "" : "disabled"}>Start mic check</button>
+      </div>
+    `;
+  }
+
+  if (stepsLeft === 0 && session.mode === "after_finish") {
+    return `
+      <div class="card signalContainer" data-kind="placed">
+        <div class="kicker">Placement</div>
+        <h2>Placed.</h2>
+        <div class="muted">Want to place another finished book?</div>
+        <div style="height:12px;"></div>
+        <div class="btns">
+          <button class="btn primary" data-action="after_finish:back_to_finished">Back to Finished</button>
+          <button class="btn" data-action="nav:library">Back to library</button>
+        </div>
       </div>
     `;
   }
@@ -383,9 +464,10 @@ function renderCompare(state) {
 
   const pair = state.currentPair;
   if (!pair) {
+    const title = session.mode === "after_finish" ? "Place this book" : "Mic check";
     return `
       <div class="card">
-        <h2>Mic check</h2>
+        <h2>${title}</h2>
         <div class="muted">Add at least 5 finished books to compare.</div>
         <div style="height:12px;"></div>
         <button class="btn" data-action="nav:library">Back to library</button>
@@ -414,15 +496,17 @@ function renderCompare(state) {
     (isPending && pendingWinner && pendingWinner !== "b" ? " isDimmed" : "") +
     (isPending && !pendingWinner ? " isDimmed" : "");
 
+  const kicker = session.mode === "after_finish" ? "Placement" : "Mic check";
+
   return `
-	    <div class="card">
-	      <div class="row">
-        <div class="stack" style="gap:4px;">
-          <div class="kicker">Mic check</div>
-          <div class="muted">Which did you like more?</div>
-        </div>
-        <div class="chip">${stepsDone + 1} / ${stepsTotal}</div>
-      </div>
+		    <div class="card">
+		      <div class="row">
+	        <div class="stack" style="gap:4px;">
+	          <div class="kicker">${kicker}</div>
+	          <div class="muted">Which did you like more?</div>
+	        </div>
+	        <div class="chip">${stepsDone + 1} / ${stepsTotal}</div>
+	      </div>
       <div style="height:12px;"></div>
 	        <div class="compareCards${enter}">
 	          <div class="${cardClassA}" data-action="compare:win" data-winner="a" role="button" aria-label="Choose A">
