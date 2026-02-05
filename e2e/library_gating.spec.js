@@ -8,8 +8,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("Start mic check is disabled until 5 finished items exist", async ({ page }) => {
-  await page.locator('[data-action="nav:compare"]').click();
-  const startBtn = page.locator('[data-action="start:miccheck"]');
+  const startBtn = page.locator('[data-kind="onboarding-init"] [data-action="start:miccheck"]');
+  await expect(startBtn).toBeVisible();
   await expect(startBtn).toBeDisabled();
 
   await page.locator('[data-action="nav:library"]').click();
@@ -20,31 +20,20 @@ test("Start mic check is disabled until 5 finished items exist", async ({ page }
   await addBook(page, { title: "Book Five", author: "Author E" });
 
   // Items exist but not finished.
-  await page.locator('[data-action="nav:compare"]').click();
   await expect(startBtn).toBeDisabled();
 
-  await page.locator('[data-action="nav:library"]').click();
   await setRowFinished(page, "Book One", true);
-  await page.locator('[data-action="nav:compare"]').click();
   await expect(startBtn).toBeDisabled();
 
-  await page.locator('[data-action="nav:library"]').click();
   await setRowFinished(page, "Book Two", true);
-  await page.locator('[data-action="nav:compare"]').click();
   await expect(startBtn).toBeDisabled();
 
-  await page.locator('[data-action="nav:library"]').click();
   await setRowFinished(page, "Book Three", true);
-  await page.locator('[data-action="nav:compare"]').click();
   await expect(startBtn).toBeDisabled();
 
-  await page.locator('[data-action="nav:library"]').click();
   await setRowFinished(page, "Book Four", true);
-  await page.locator('[data-action="nav:compare"]').click();
   await expect(startBtn).toBeDisabled();
 
-  await page.locator('[data-action="nav:library"]').click();
   await setRowFinished(page, "Book Five", true);
-  await page.locator('[data-action="nav:compare"]').click();
   await expect(startBtn).toBeEnabled();
 });

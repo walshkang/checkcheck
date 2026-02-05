@@ -69,6 +69,14 @@ export function renderApp(state) {
   const { surface } = state;
   const navLibraryCurrent = surface === "library" ? ' aria-current="page"' : "";
   const navCompareCurrent = surface === "compare" ? ' aria-current="page"' : "";
+  const decidedComparisonsCount =
+    typeof state.decidedComparisonsCount === "number"
+      ? state.decidedComparisonsCount
+      : state.comparisons.filter((c) => c.winner_item_id != null).length;
+  const showMicCheckNav = decidedComparisonsCount > 0 || (state.finishedIds?.length ?? 0) >= 5;
+  const compareBtn = showMicCheckNav
+    ? `<button class="pill" data-action="nav:compare"${navCompareCurrent}>Mic check</button>`
+    : "";
 
   return `
     <div class="topbar">
@@ -78,7 +86,7 @@ export function renderApp(state) {
       </div>
       <div class="nav">
         <button class="pill" data-action="nav:library"${navLibraryCurrent}>Library</button>
-        <button class="pill" data-action="nav:compare"${navCompareCurrent}>Mic check</button>
+        ${compareBtn}
       </div>
     </div>
     ${state.toast ? renderToast(state.toast) : ""}
@@ -117,7 +125,7 @@ function renderFooter(state) {
 		  `;
 	}
 
-	function renderLibrary(state) {
+function renderLibrary(state) {
   const empty = state.items.length === 0;
   const addLabel = empty ? "Add your first book" : "Add book";
   const searchPanel = renderSearchPanel(state);
@@ -126,14 +134,19 @@ function renderFooter(state) {
     typeof state.decidedComparisonsCount === "number"
       ? state.decidedComparisonsCount
       : state.comparisons.filter((c) => c.winner_item_id != null).length;
-  const showInitiationBanner = state.libraryView === "finished" && state.finishedIds.length >= 5 && decidedComparisonsCount === 0;
-  const initiationBanner = showInitiationBanner
+  const finishedCount = state.finishedIds?.length ?? 0;
+  const onboardingActive = decidedComparisonsCount === 0;
+  const onboardingBanner = onboardingActive
     ? `
-        <div class="banner" data-kind="initiation-miccheck">
-          <div class="title">Ready for a mic check?</div>
-          <div class="sub">Ten quick picks. Your shelf will snap into place.</div>
+        <div class="banner" data-kind="onboarding-init">
+          <div class="title">${finishedCount >= 5 ? "Ready for a mic check?" : "Add 5 finished books to begin"}</div>
+          <div class="sub">${
+            finishedCount >= 5
+              ? "Ten quick picks. Your shelf will snap into place."
+              : `Finished ${finishedCount} / 5 · Add books you’ve read as Finished.`
+          }</div>
           <div style="height:10px;"></div>
-          <button class="btn primary" type="button" data-action="start:miccheck">Start mic check</button>
+          <button class="btn primary" type="button" data-action="start:miccheck" ${finishedCount >= 5 ? "" : "disabled"}>Start mic check</button>
         </div>
         <div style="height:12px;"></div>
       `
@@ -310,14 +323,14 @@ function renderFooter(state) {
 	              : ""
 	          }
 	        </div>
-	        <div class="row" style="justify-content:flex-start; gap:8px; margin-bottom:12px;">
-	          <button class="pill" data-action="library:view" data-view="want"${state.libraryView === "want" ? ' aria-current="page"' : ""}>Want to read</button>
-	          <button class="pill" data-action="library:view" data-view="finished"${
-	            state.libraryView === "finished" ? ' aria-current="page"' : ""
-	          }>Finished</button>
-		        </div>
-		        ${initiationBanner}
-		        ${unplacedSection}
+		        <div class="row" style="justify-content:flex-start; gap:8px; margin-bottom:12px;">
+		          <button class="pill" data-action="library:view" data-view="want"${state.libraryView === "want" ? ' aria-current="page"' : ""}>Want to read</button>
+		          <button class="pill" data-action="library:view" data-view="finished"${
+		            state.libraryView === "finished" ? ' aria-current="page"' : ""
+		          }>Finished</button>
+			        </div>
+			        ${onboardingBanner}
+			        ${unplacedSection}
 		        ${
 		          state.items.length === 0
 		            ? `<div class="muted">Add your first book to begin.</div>`

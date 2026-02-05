@@ -70,10 +70,15 @@ export async function setLibraryView(page, view) {
 }
 
 export async function startMicCheck(page) {
-  // Mic check is a separate surface; navigate there explicitly so this doesn't
-  // accidentally click a different "start" CTA.
-  await page.locator('[data-action="nav:compare"]').click();
-  await page.locator('[data-action="start:miccheck"]').click();
+  // Prefer the Mic check surface when available; otherwise use the onboarding CTA.
+  const compareNav = page.locator('[data-action="nav:compare"]');
+  if (await compareNav.count()) {
+    await compareNav.click();
+    await page.locator('[data-action="start:miccheck"]').click();
+  } else {
+    await page.locator('[data-action="nav:library"]').click();
+    await page.locator('[data-kind="onboarding-init"] [data-action="start:miccheck"]').click();
+  }
   await expect(page.locator('[data-action="compare:skip"]')).toBeVisible();
 }
 
