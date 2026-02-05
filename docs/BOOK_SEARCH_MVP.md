@@ -20,7 +20,7 @@ Last updated: 2026-02-04
 
 ## UI Shape (Repo-Native)
 - Library surface includes a second form: `data-action="search:openlibrary"`.
-- Search results render below the search form with per-result “Add” buttons: `data-action="search:add"`.
+- Search results render below the search form with per-result Want/Finished buttons: `data-action="search:add"` + `data-target-status="want|finished"`.
 - Clear button: `data-action="search:clear"`.
 
 ## DOM Discriminators (Avoid Selector Ambiguity)
@@ -73,18 +73,18 @@ Search-derived metadata may optionally power a **suggested type** (non-authorita
 - Do not hit real Open Library in CI; mock `fetch` with Playwright routing.
 - With current Playwright config (`baseURL` includes `/public`), you can use `page.goto("/")` (panel shown by default).
 - Add one spec covering:
-- Search panel appears only when flag is on.
+- Search panel appears when flag is on (default) and is absent when `?search=0`.
 - Search request is made; results render under `data-kind="search-result"`.
-- Clicking “Add” creates a library row under `data-kind="library-item"`.
+- Clicking Want/Finished creates a library row under `data-kind="library-item"`.
 - Export JSON contains optional fields on the added item; wipe; import restores those fields.
 
 ## Definition of Done
-- With `?search=1`, user can:
+- With search enabled (default), user can:
 - Search Open Library and see results.
 - Add a result and see it in the library immediately.
 - Refresh: item persists (IndexedDB).
 - Export/import round-trip preserves optional item fields (`source`, `isbn`, `cover_url`, `first_publish_year`).
-- Without `?search=1`:
+- With `?search=0`:
 - Search UI is absent.
 - Manual add, mic check, scoring, export/import continue working unchanged.
 

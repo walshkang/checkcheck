@@ -4,7 +4,11 @@ export async function gotoApp(page) {
   await page.goto("/");
   // Footer is always present.
   await expect(page.locator('[data-action="dev:wipeAll"]')).toBeVisible();
-  await expect(page.locator('form[data-action="add:item"]')).toBeVisible();
+  // Add paths: search panel (default) or manual add.
+  const searchForm = page.locator('form[data-action="search:openlibrary"]');
+  const manualForm = page.locator('form[data-action="add:item"]');
+  if (await searchForm.count()) await expect(searchForm).toBeVisible();
+  else await expect(manualForm).toBeVisible();
 }
 
 export async function wipeAll(page) {
@@ -23,6 +27,13 @@ export async function resetDisplay(page) {
 
 export async function addBook(page, { title, author, status = "want" }) {
   const form = page.locator('form[data-action="add:item"]');
+  if (!(await form.isVisible())) {
+    const details = page.locator('details[data-kind="manual-add"]').first();
+    if (await details.count()) {
+      await details.locator("summary").click();
+      await expect(form).toBeVisible();
+    }
+  }
   await form.locator('input[name="title"]').fill(title);
   await form.locator('input[name="author"]').fill(author ?? "");
   const intent = status === "finished" ? "finished" : "want";

@@ -210,6 +210,26 @@ function renderLibrary(state) {
       `
     : "";
 
+  const manualForm = `
+    <form class="stack" data-action="add:item">
+      <input class="input" name="title" placeholder="Title" autocomplete="off" required />
+      <input class="input" name="author" placeholder="Author (optional)" autocomplete="off" />
+      <div class="row" style="justify-content:flex-start; gap:10px; flex-wrap:wrap;">
+        <button class="btn primary" type="submit" name="add_intent" value="want" data-intent="want">${addLabel} to Want</button>
+        <button class="btn" type="submit" name="add_intent" value="finished" data-intent="finished">Add as Finished</button>
+      </div>
+    </form>
+  `;
+  const manualSection = state.searchEnabled
+    ? `
+        <details data-kind="manual-add" style="margin-top:10px;">
+          <summary class="link">Can’t find it? Add manually</summary>
+          <div style="height:10px;"></div>
+          ${manualForm}
+        </details>
+      `
+    : manualForm;
+
   const listRows = state.libraryRows.filter((row) => {
     if (row.entry.archived_at) return true;
     if (state.libraryView === "finished") return row.entry.status === "finished";
@@ -304,15 +324,8 @@ function renderLibrary(state) {
 			            ? `<div class="muted" style="margin-bottom:12px;">Mic check your taste. Add a few books you’ve read. Then we’ll do a quick mic check to rank them.</div>`
 			            : ""
 			        }
-			        <form class="stack" data-action="add:item">
-			          <input class="input" name="title" placeholder="Title" autocomplete="off" required />
-			          <input class="input" name="author" placeholder="Author (optional)" autocomplete="off" />
-			          <div class="row" style="justify-content:flex-start; gap:10px; flex-wrap:wrap;">
-			            <button class="btn primary" type="submit" name="add_intent" value="want" data-intent="want">${addLabel} to Want</button>
-			            <button class="btn" type="submit" name="add_intent" value="finished" data-intent="finished">Add as Finished</button>
-			          </div>
-			        </form>
 			        ${searchPanel}
+			        ${manualSection}
 			      </div>
 	      <div class="card">
 	        <div class="row" style="margin-bottom:10px;">
