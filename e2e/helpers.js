@@ -21,11 +21,12 @@ export async function resetDisplay(page) {
   await expect(page.getByText("Display reset.")).toBeVisible();
 }
 
-export async function addBook(page, { title, author }) {
+export async function addBook(page, { title, author, status = "want" }) {
   const form = page.locator('form[data-action="add:item"]');
   await form.locator('input[name="title"]').fill(title);
   await form.locator('input[name="author"]').fill(author ?? "");
-  await form.locator('button[type="submit"]').click();
+  const intent = status === "finished" ? "finished" : "want";
+  await form.locator(`button[type="submit"][data-intent="${intent}"]`).click();
   await expect(getRowByTitle(page, title)).toBeVisible();
 }
 

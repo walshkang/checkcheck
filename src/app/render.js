@@ -114,10 +114,10 @@ function renderFooter(state) {
         <button class="link" data-action="dev:wipeAll">Clear local data</button>
       </div>
     </div>
-  `;
-}
+		  `;
+	}
 
-function renderLibrary(state) {
+	function renderLibrary(state) {
   const empty = state.items.length === 0;
   const addLabel = empty ? "Add your first book" : "Add book";
   const searchPanel = renderSearchPanel(state);
@@ -282,26 +282,25 @@ function renderLibrary(state) {
     })
     .join("");
 
-  return `
-		    <div class="grid">
-		      <div class="card">
-		        <h2>Add books</h2>
-	        ${
-	          empty
-	            ? `<div class="muted" style="margin-bottom:12px;">Mic check your taste. Add a few books you’ve read. Then we’ll do a quick mic check to rank them.</div>`
-	            : ""
-	        }
-	        <form class="stack" data-action="add:item">
-	          <input class="input" name="title" placeholder="Title" autocomplete="off" required />
-	          <input class="input" name="author" placeholder="Author (optional)" autocomplete="off" />
-	          <label class="row" style="justify-content:flex-start; gap:8px; color:var(--muted); font-size:13px;">
-	            <input type="checkbox" name="already_finished" />
-	            Already finished
-	          </label>
-	          <button class="btn primary" type="submit">${addLabel}</button>
-	        </form>
-	        ${searchPanel}
-	      </div>
+		  return `
+			    <div class="grid">
+			      <div class="card">
+			        <h2>Add books</h2>
+			        ${
+			          empty
+			            ? `<div class="muted" style="margin-bottom:12px;">Mic check your taste. Add a few books you’ve read. Then we’ll do a quick mic check to rank them.</div>`
+			            : ""
+			        }
+			        <form class="stack" data-action="add:item">
+			          <input class="input" name="title" placeholder="Title" autocomplete="off" required />
+			          <input class="input" name="author" placeholder="Author (optional)" autocomplete="off" />
+			          <div class="row" style="justify-content:flex-start; gap:10px; flex-wrap:wrap;">
+			            <button class="btn primary" type="submit" name="add_intent" value="want" data-intent="want">${addLabel} to Want</button>
+			            <button class="btn" type="submit" name="add_intent" value="finished" data-intent="finished">Add as Finished</button>
+			          </div>
+			        </form>
+			        ${searchPanel}
+			      </div>
 	      <div class="card">
 	        <div class="row" style="margin-bottom:10px;">
 	          <h2 style="margin:0;">Your shelf</h2>
@@ -333,7 +332,7 @@ function renderLibrary(state) {
 	  `;
 }
 
-function renderSearchPanel(state) {
+	function renderSearchPanel(state) {
   if (!state.searchEnabled) return "";
 
   const q = escapeHtml(state.searchQuery || "");
@@ -349,11 +348,11 @@ function renderSearchPanel(state) {
           ? `<div class="muted">Search error.</div>`
           : `<div class="muted">Search Open Library</div>`;
 
-  const results =
-    state.searchResults?.length
-      ? `<ul class="list" style="margin-top:10px;">
-          ${state.searchResults
-	            .map((r, i) => {
+	  const results =
+	    state.searchResults?.length
+	      ? `<ul class="list" style="margin-top:10px;">
+	          ${state.searchResults
+		            .map((r, i) => {
 	              const title = escapeHtml(r.title || "");
 	              const author = escapeHtml(r.author || "");
 	              const suggested = r.type_suggested
@@ -366,22 +365,28 @@ function renderSearchPanel(state) {
 	                ? `<img src="${escapeHtml(r.cover_url)}" alt="" width="32" height="48" style="border-radius:8px; border:1px solid var(--stroke);" loading="lazy" />`
 	                : `<div style="width:32px; height:48px; border-radius:8px; border:1px solid var(--stroke); background: rgba(255,255,255,0.4);"></div>`;
 
-              return `
-                <li class="search-item" data-kind="search-result">
-                  <div class="row" style="align-items:center;">
-                    ${cover}
-	                    <div class="stack" style="gap:2px; margin-left:10px; flex:1;">
-	                      <div class="title">${title}</div>
-	                      <div class="sub">${author || `<span class="muted">Unknown author</span>`}${year}</div>
-	                      ${suggested}
-	                    </div>
-	                    <button class="btn" type="button" data-action="search:add" data-result-idx="${i}">Add</button>
-	                  </div>
-	                </li>
-	              `;
-	            })
-            .join("")}
-        </ul>`
+	              const btnWant = `<button class="btn" type="button" data-action="search:add" data-target-status="want" data-result-idx="${i}">Want</button>`;
+	              const btnFinished = `<button class="btn" type="button" data-action="search:add" data-target-status="finished" data-result-idx="${i}">Finished</button>`;
+
+	              return `
+	                <li class="search-item" data-kind="search-result">
+	                  <div class="row" style="align-items:center;">
+	                    ${cover}
+		                    <div class="stack" style="gap:2px; margin-left:10px; flex:1;">
+		                      <div class="title">${title}</div>
+		                      <div class="sub">${author || `<span class="muted">Unknown author</span>`}${year}</div>
+		                      ${suggested}
+		                    </div>
+		                    <div class="row" style="gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+		                      ${btnWant}
+		                      ${btnFinished}
+		                    </div>
+		                  </div>
+		                </li>
+		              `;
+		            })
+	            .join("")}
+	        </ul>`
       : "";
 
   const errorHint =

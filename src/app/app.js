@@ -364,11 +364,15 @@ export async function startApp() {
     await handlePatchEntry(itemId, { tags: next });
   }
 
-	  async function handleAddItem(form) {
+	  async function handleAddItem(form, submitter = null) {
 	    const fd = new FormData(form);
 	    const title = String(fd.get("title") || "").trim();
 	    const author = String(fd.get("author") || "").trim();
-	    const alreadyFinished = fd.get("already_finished") != null;
+	    const submitIntentRaw =
+	      submitter instanceof HTMLButtonElement
+	        ? submitter.value || submitter.getAttribute("value") || submitter.getAttribute("data-intent") || ""
+	        : "";
+	    const intent = String(submitIntentRaw || fd.get("add_intent") || "want");
 	    if (!title) return;
 
 	    const { item, entry } = await idb.addItem({ title, author });
@@ -378,7 +382,7 @@ export async function startApp() {
 	    state.libraryByItemId.set(item.id, entry);
 
 	    form.reset();
-	    if (alreadyFinished) {
+	    if (intent === "finished") {
 	      state.libraryView = "finished";
 	      await handleSetStatus(item.id, "finished");
 	      return;
@@ -432,39 +436,60 @@ export async function startApp() {
     return `${String(title || "").trim().toLowerCase()}|${String(author || "").trim().toLowerCase()}`;
   }
 
-  async function handleAddFromSearch(idx) {
-    const r = state.searchResults[idx];
-    if (!r) return;
+	  async function handleAddFromSearch(idx, targetStatus = "want") {
+	    const r = state.searchResults[idx];
+	    if (!r) return;
+	    const intent = targetStatus === "finished" ? "finished" : "want";
 
-    const sourceKey = r?.source?.provider === "openlibrary" ? r.source.key : null;
-    if (sourceKey) {
-      const existing = state.items.find(
-        (it) => it?.source?.provider === "openlibrary" && it?.source?.key === sourceKey
-      );
-      if (existing) {
-        const entry = state.libraryByItemId.get(existing.id);
-        if (entry?.archived_at) {
-          await handleRestore(existing.id);
-          return;
-        }
-        setToast("Already in your library.", { hint: "Relative to your library." });
-        return;
-      }
-    }
+	    const sourceKey = r?.source?.provider === "openlibrary" ? r.source.key : null;
+	    if (sourceKey) {
+	      const existing = state.items.find(
+	        (it) => it?.source?.provider === "openlibrary" && it?.source?.key === sourceKey
+	      );
+	      if (existing) {
+	        const entry = state.libraryByItemId.get(existing.id);
+	        if (entry?.archived_at) {
+	          await handleRestore(existing.id);
+	          if (intent === "finished" && entry?.status !== "finished") {
+	            state.libraryView = "finished";
+	            await handleSetStatus(existing.id, "finished");
+	          }
+	          return;
+	        }
+	        if (intent === "finished" && entry?.status !== "finished") {
+	          state.libraryView = "finished";
+	          await handleSetStatus(existing.id, "finished");
+	          setToast("Marked finished.", { hint: "Ready to place when you are." });
+	          return;
+	        }
+	        setToast("Already in your library.", { hint: "Relative to your library." });
+	        return;
+	      }
+	    }
 
-    const key = normalizeKey(r.title, r.author);
-    if (!sourceKey) {
-      const existing = state.items.find((it) => normalizeKey(it.title, it.author) === key);
-      if (existing) {
-        const entry = state.libraryByItemId.get(existing.id);
-        if (entry?.archived_at) {
-          await handleRestore(existing.id);
-          return;
-        }
-        setToast("Already in your library.", { hint: "Try a different edition or spelling." });
-        return;
-      }
-    }
+	    const key = normalizeKey(r.title, r.author);
+	    if (!sourceKey) {
+	      const existing = state.items.find((it) => normalizeKey(it.title, it.author) === key);
+	      if (existing) {
+	        const entry = state.libraryByItemId.get(existing.id);
+	        if (entry?.archived_at) {
+	          await handleRestore(existing.id);
+	          if (intent === "finished" && entry?.status !== "finished") {
+	            state.libraryView = "finished";
+	            await handleSetStatus(existing.id, "finished");
+	          }
+	          return;
+	        }
+	        if (intent === "finished" && entry?.status !== "finished") {
+	          state.libraryView = "finished";
+	          await handleSetStatus(existing.id, "finished");
+	          setToast("Marked finished.", { hint: "Ready to place when you are." });
+	          return;
+	        }
+	        setToast("Already in your library.", { hint: "Try a different edition or spelling." });
+	        return;
+	      }
+	    }
 
     const { item, entry } = await idb.addItem({
       title: r.title,
@@ -477,13 +502,18 @@ export async function startApp() {
       type_suggested: mapSubjectsToTypeSuggested(r.raw_subjects)
     });
 
-    state.items.push(item);
-    state.itemsById.set(item.id, item);
-    state.libraryEntries.push(entry);
-    state.libraryByItemId.set(item.id, entry);
-    render();
-    setToast("Added.", { hint: "Ratings are relative to your library." });
-  }
+	    state.items.push(item);
+	    state.itemsById.set(item.id, item);
+	    state.libraryEntries.push(entry);
+	    state.libraryByItemId.set(item.id, entry);
+	    render();
+	    setToast("Added.", { hint: "Ratings are relative to your library." });
+
+	    if (intent === "finished") {
+	      state.libraryView = "finished";
+	      await handleSetStatus(item.id, "finished");
+	    }
+	  }
 
 	  async function handleSetStatus(itemId, status) {
 	    const prev = state.libraryByItemId.get(itemId);
@@ -638,19 +668,19 @@ export async function startApp() {
     setToast("Local data cleared.", { hint: "You can import a JSON export to restore." });
   }
 
-  root.addEventListener("submit", (ev) => {
-    const form = ev.target;
-    if (!(form instanceof HTMLFormElement)) return;
-    const action = form.getAttribute("data-action");
-    if (action === "add:item") {
-      ev.preventDefault();
-      handleAddItem(form).catch((e) => alert(String(e)));
-    }
-    if (action === "search:openlibrary") {
-      ev.preventDefault();
-      handleSearchOpenLibrary(form).catch((e) => alert(String(e)));
-    }
-    if (action === "tag:add") {
+	  root.addEventListener("submit", (ev) => {
+	    const form = ev.target;
+	    if (!(form instanceof HTMLFormElement)) return;
+	    const action = form.getAttribute("data-action");
+	    if (action === "add:item") {
+	      ev.preventDefault();
+	      handleAddItem(form, ev.submitter ?? null).catch((e) => alert(String(e)));
+	    }
+	    if (action === "search:openlibrary") {
+	      ev.preventDefault();
+	      handleSearchOpenLibrary(form).catch((e) => alert(String(e)));
+	    }
+	    if (action === "tag:add") {
       ev.preventDefault();
       handleTagAdd(form).catch((e) => alert(String(e)));
     }
@@ -799,11 +829,12 @@ export async function startApp() {
       return void handleSetStatus(itemId, "finished").catch((e) => alert(String(e)));
     }
 
-    if (action === "search:add") {
-      const idx = Number(el.getAttribute("data-result-idx") || "-1");
-      if (!Number.isFinite(idx) || idx < 0) return;
-      return void handleAddFromSearch(idx).catch((e) => alert(String(e)));
-    }
+	    if (action === "search:add") {
+	      const idx = Number(el.getAttribute("data-result-idx") || "-1");
+	      if (!Number.isFinite(idx) || idx < 0) return;
+	      const targetStatus = el.getAttribute("data-target-status") || "want";
+	      return void handleAddFromSearch(idx, targetStatus).catch((e) => alert(String(e)));
+	    }
 
     if (action === "search:clear") {
       state.searchQuery = "";

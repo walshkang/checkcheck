@@ -50,7 +50,7 @@ test("Search (flagged) -> add -> export contains optional fields -> wipe -> impo
   await expect(result).toBeVisible();
   await expect(result).toContainText("Suggested: Fiction");
 
-  await result.locator('[data-action="search:add"]').click();
+	  await result.locator('[data-action="search:add"][data-target-status="want"]').click();
 
   // Added to library.
   const row = page.locator('.list-item[data-kind="library-item"]').filter({ hasText: "Result for tale" }).first();

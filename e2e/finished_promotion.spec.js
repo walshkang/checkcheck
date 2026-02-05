@@ -46,7 +46,7 @@ test("Finished promotion: suggested -> confirmed (unless cleared)", async ({ pag
 
   const result = page.locator('.search-item[data-kind="search-result"]').first();
   await expect(result).toContainText("Suggested: Fiction");
-  await result.locator('[data-action="search:add"]').click();
+	  await result.locator('[data-action="search:add"][data-target-status="want"]').click();
 
   const row = getRowByTitle(page, "Search Result");
   await expect(row).toBeVisible();
@@ -85,7 +85,7 @@ test("Finished promotion: clearing prevents promotion", async ({ page }, testInf
 
   const result = page.locator('.search-item[data-kind="search-result"]').first();
   await expect(result).toContainText("Suggested: Fiction");
-  await result.locator('[data-action="search:add"]').click();
+	  await result.locator('[data-action="search:add"][data-target-status="want"]').click();
 
   const row = getRowByTitle(page, "Search Result");
   await expect(row).toBeVisible();
@@ -103,4 +103,3 @@ test("Finished promotion: clearing prevents promotion", async ({ page }, testInf
   expect(entry).toHaveProperty("type_confirmed", null);
   expect(entry).toHaveProperty("type_decision", "cleared");
 });
-
