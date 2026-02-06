@@ -77,10 +77,11 @@ export async function startApp() {
     searchLanguage: "en", // en | es | fr | de | it | pt | ja | ko | zh | any
     searchQuery: "",
     searchStatus: "idle", // idle | loading | done | error
-    searchResults: [],
-    searchError: null,
-    searchRequestId: 0,
-    searchEditionPreview: null, // { resultIdx, existingItemId, status, candidate, error }
+	    searchResults: [],
+	    searchError: null,
+	    searchRequestId: 0,
+	    searchConfidence: null, // { ok, bestScore, secondScore } | null
+	    searchEditionPreview: null, // { resultIdx, existingItemId, status, candidate, error }
 
     comparePending: null, // { action: "win"|"skip"|"undo", winner: "a"|"b"|null, at: number }
     compareEnterAt: 0,
@@ -89,9 +90,10 @@ export async function startApp() {
 	    importFlow: null, // { kind, provider, fileName, ... }
     postImportMicCheckPrompt: null, // { at: number }
 
-    detailOpenLibraryStatus: "idle", // idle | loading | preview
-    detailOpenLibraryCandidate: null // normalized OL result
-  };
+	    detailOpenLibraryStatus: "idle", // idle | loading | pick | preview
+	    detailOpenLibraryCandidate: null, // normalized OL result
+	    detailOpenLibraryCandidates: null // normalized OL results[]
+	  };
 
   function logEvent(type, data, { sessionId = null } = {}) {
     const sid = sessionId ?? state.session?.session_id ?? null;
@@ -540,10 +542,11 @@ export async function startApp() {
     const entry = state.libraryByItemId.get(itemId);
     if (!item || !entry || entry.archived_at) return;
 
-    if (state.detailOpenLibraryStatus === "loading") return;
-    state.detailOpenLibraryStatus = "loading";
-    state.detailOpenLibraryCandidate = null;
-    render();
+	    if (state.detailOpenLibraryStatus === "loading") return;
+	    state.detailOpenLibraryStatus = "loading";
+	    state.detailOpenLibraryCandidate = null;
+	    state.detailOpenLibraryCandidates = null;
+	    render();
 
     try {
       const qTitle = String(item.title || "").trim();
@@ -581,27 +584,43 @@ export async function startApp() {
         setToast("No Open Library match found.", { hint: "Try editing title/author, then retry." });
         return;
       }
-      if (!confidence.ok) {
-        state.detailOpenLibraryStatus = "idle";
-        render();
-        setToast("No confident Open Library match.", { hint: "Try a more exact title/author, or adjust language." });
-        return;
-      }
-      state.detailOpenLibraryStatus = "preview";
-      state.detailOpenLibraryCandidate = best;
-      render();
-    } catch (e) {
-      state.detailOpenLibraryStatus = "idle";
-      render();
-      setToast("Open Library update failed.", { hint: String(e?.message || e) });
-    }
-  }
+	      if (!confidence.ok) {
+	        state.detailOpenLibraryStatus = "pick";
+	        state.detailOpenLibraryCandidate = null;
+	        state.detailOpenLibraryCandidates = results.slice(0, 5);
+	        render();
+	        return;
+	      }
+	      state.detailOpenLibraryStatus = "preview";
+	      state.detailOpenLibraryCandidate = best;
+	      state.detailOpenLibraryCandidates = null;
+	      render();
+	    } catch (e) {
+	      state.detailOpenLibraryStatus = "idle";
+	      state.detailOpenLibraryCandidates = null;
+	      render();
+	      setToast("Open Library update failed.", { hint: String(e?.message || e) });
+	    }
+	  }
 
-  function cancelOpenLibraryUpdate() {
-    state.detailOpenLibraryStatus = "idle";
-    state.detailOpenLibraryCandidate = null;
-    render();
-  }
+	  function pickOpenLibraryCandidate(idx) {
+	    const i = Number(idx);
+	    const arr = Array.isArray(state.detailOpenLibraryCandidates) ? state.detailOpenLibraryCandidates : [];
+	    if (!Number.isFinite(i) || i < 0 || i >= arr.length) return;
+	    const cand = arr[i];
+	    if (!cand) return;
+	    state.detailOpenLibraryStatus = "preview";
+	    state.detailOpenLibraryCandidate = cand;
+	    state.detailOpenLibraryCandidates = null;
+	    render();
+	  }
+
+	  function cancelOpenLibraryUpdate() {
+	    state.detailOpenLibraryStatus = "idle";
+	    state.detailOpenLibraryCandidate = null;
+	    state.detailOpenLibraryCandidates = null;
+	    render();
+	  }
 
   async function applyOpenLibraryUpdate() {
     const itemId = state.detailItemId;
@@ -686,17 +705,19 @@ export async function startApp() {
     const q = String(fd.get("q") || "").trim();
     const lang = String(fd.get("lang") || "en").trim().toLowerCase();
     const allowed = new Set(["en", "es", "fr", "de", "it", "pt", "ja", "ko", "zh", "any"]);
-    state.searchLanguage = allowed.has(lang) ? lang : "en";
-    state.searchQuery = q;
-    state.searchEditionPreview = null;
+	    state.searchLanguage = allowed.has(lang) ? lang : "en";
+	    state.searchQuery = q;
+	    state.searchEditionPreview = null;
+	    state.searchConfidence = null;
 
-    if (!q) {
-      state.searchStatus = "idle";
-      state.searchResults = [];
-      state.searchError = null;
-      render();
-      return;
-    }
+	    if (!q) {
+	      state.searchStatus = "idle";
+	      state.searchResults = [];
+	      state.searchError = null;
+	      state.searchConfidence = null;
+	      render();
+	      return;
+	    }
 
     state.searchStatus = "loading";
     state.searchError = null;
@@ -722,24 +743,26 @@ export async function startApp() {
 	      if (!results.length && language && language !== "any") {
 	        results = await searchOpenLibrary(q, { limit: 10, language: "any", requireLanguage: false, resolveEditions: false });
 	      }
-	      if (reqId !== state.searchRequestId) return; // stale response
-        results = rerankOpenLibraryResults(results, { queryText: q });
-	      state.searchResults = results.map((r) => ({
-	        ...r,
-	        type_suggested: mapSubjectsToTypeSuggested(r.raw_subjects)
-	      }));
+		      if (reqId !== state.searchRequestId) return; // stale response
+	        results = rerankOpenLibraryResults(results, { queryText: q });
+	        state.searchConfidence = isConfidentBestMatch(results, { queryText: q });
+		      state.searchResults = results.map((r) => ({
+		        ...r,
+		        type_suggested: mapSubjectsToTypeSuggested(r.raw_subjects)
+		      }));
 	      state.searchStatus = "done";
 	      state.searchError = null;
 	      render();
 	    } catch (e) {
       if (reqId !== state.searchRequestId) return;
-      state.searchStatus = "error";
-      state.searchResults = [];
-      state.searchError = String(e?.message ?? e);
-      setToast("Search failed.", { hint: navigator.onLine ? state.searchError : "You’re offline." });
-      render();
-    }
-  }
+	      state.searchStatus = "error";
+	      state.searchResults = [];
+	      state.searchError = String(e?.message ?? e);
+	      state.searchConfidence = null;
+	      setToast("Search failed.", { hint: navigator.onLine ? state.searchError : "You’re offline." });
+	      render();
+	    }
+	  }
 
   function normalizeKey(title, author) {
     return `${String(title || "").trim().toLowerCase()}|${String(author || "").trim().toLowerCase()}`;
@@ -1532,15 +1555,16 @@ export async function startApp() {
       return void handleUndo({ input }).catch((e) => alert(String(e)));
     }
 
-    if (action === "open:detail") {
-      const itemId = el.getAttribute("data-item-id");
-      if (!itemId) return;
-      state.detailItemId = itemId;
-      state.detailOpenLibraryStatus = "idle";
-      state.detailOpenLibraryCandidate = null;
-      state.surface = "detail";
-      return render();
-    }
+	    if (action === "open:detail") {
+	      const itemId = el.getAttribute("data-item-id");
+	      if (!itemId) return;
+	      state.detailItemId = itemId;
+	      state.detailOpenLibraryStatus = "idle";
+	      state.detailOpenLibraryCandidate = null;
+	      state.detailOpenLibraryCandidates = null;
+	      state.surface = "detail";
+	      return render();
+	    }
 
     if (action === "item:archive") {
       const itemId = state.detailItemId;
@@ -1555,9 +1579,14 @@ export async function startApp() {
       return void handleRestore(itemId).catch((e) => alert(String(e)));
     }
 
-    if (action === "meta:update_openlibrary") return void startOpenLibraryUpdate();
-    if (action === "meta:cancel_openlibrary") return void cancelOpenLibraryUpdate();
-    if (action === "meta:apply_openlibrary") return void applyOpenLibraryUpdate().catch((e) => alert(String(e)));
+	    if (action === "meta:update_openlibrary") return void startOpenLibraryUpdate();
+	    if (action === "meta:cancel_openlibrary") return void cancelOpenLibraryUpdate();
+	    if (action === "meta:apply_openlibrary") return void applyOpenLibraryUpdate().catch((e) => alert(String(e)));
+	    if (action === "meta:pick_openlibrary") {
+	      const idx = el.getAttribute("data-cand-idx");
+	      pickOpenLibraryCandidate(idx);
+	      return;
+	    }
 
     if (action === "finishprompt:dismiss") {
       state.finishPromptItemId = null;
@@ -1602,16 +1631,17 @@ export async function startApp() {
       return void handleSearchApplyEdition().catch((e) => alert(String(e)));
     }
 
-    if (action === "search:clear") {
-      state.searchQuery = "";
-      state.searchResults = [];
-      state.searchStatus = "idle";
-      state.searchError = null;
-      state.searchRequestId++;
-      state.searchEditionPreview = null;
-      render();
-      return;
-    }
+	    if (action === "search:clear") {
+	      state.searchQuery = "";
+	      state.searchResults = [];
+	      state.searchStatus = "idle";
+	      state.searchError = null;
+	      state.searchRequestId++;
+	      state.searchEditionPreview = null;
+	      state.searchConfidence = null;
+	      render();
+	      return;
+	    }
 
     if (action === "status:set") {
       const status = el.getAttribute("data-status");

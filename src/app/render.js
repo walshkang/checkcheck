@@ -473,6 +473,11 @@ function renderLibrary(state) {
           ? `<div class="muted">Search error.</div>`
           : `<div class="muted">Search Open Library</div>`;
 
+  const closeMatchesHint =
+    status === "done" && state.searchResults.length && state.searchConfidence && !state.searchConfidence.ok
+      ? `<div class="muted" style="margin-top:6px; font-size:12px;">Showing close matches — double-check title/author.</div>`
+      : "";
+
 	const results =
 	    state.searchResults?.length
 	      ? `<ul class="list" style="margin-top:10px;">
@@ -599,6 +604,7 @@ function renderLibrary(state) {
   return `
     <div style="height:12px;"></div>
     ${header}
+    ${closeMatchesHint}
     <form class="row" style="gap:8px; margin-top:8px; flex-wrap:wrap;" data-action="search:openlibrary">
       <select class="input" name="lang" style="min-width: 180px;">
         <option value="en" ${langMode === "en" ? "selected" : ""}>English</option>
@@ -871,6 +877,7 @@ function renderDetail(state) {
   const canUpdateMeta = !isArchived;
   const metaStatus = state.detailOpenLibraryStatus || "idle";
   const cand = state.detailOpenLibraryCandidate;
+  const cands = Array.isArray(state.detailOpenLibraryCandidates) ? state.detailOpenLibraryCandidates : [];
   const languageCode = typeof state.searchLanguage === "string" ? state.searchLanguage : "en";
   const languageLabel =
     {
@@ -918,11 +925,52 @@ function renderDetail(state) {
   const metaBtnLabel =
     metaStatus === "loading" ? "Updating…" : metaStatus === "preview" ? "Update metadata (Open Library)" : "Update metadata (Open Library)";
   const metaBtnDisabled = !canUpdateMeta || metaStatus === "loading";
+  const metaCandidatePick =
+    metaStatus === "pick" && cands.length
+      ? `
+        <div class="inlinePrompt" data-kind="openlibrary-pick" style="margin-top:12px;">
+          <div class="muted">Pick a close match</div>
+          <div class="muted" style="margin-top:6px; font-size:12px;">We couldn’t pick a single best match with high confidence.</div>
+          <div style="height:10px;"></div>
+          <div class="stack" style="gap:8px;">
+            ${cands
+              .map((r, i) => {
+                const title = escapeHtml(r.title || "");
+                const author = escapeHtml(r.author || "");
+                const img = r.cover_url
+                  ? `<img src="${escapeHtml(r.cover_url)}" alt="" width="32" height="48" style="border-radius:8px; border:1px solid var(--stroke);" loading="lazy" />`
+                  : `<div style="width:32px; height:48px; border-radius:8px; border:1px solid var(--stroke); background: rgba(255,255,255,0.4);"></div>`;
+                const bits = [];
+                if (r.publisher) bits.push(escapeHtml(r.publisher));
+                if (r.first_publish_year) bits.push(escapeHtml(r.first_publish_year));
+                const l = languageLabel3(r.language);
+                if (l) bits.push(escapeHtml(l));
+                if (r.isbn) bits.push(`ISBN ${escapeHtml(String(r.isbn).slice(0, 13))}`);
+                const line = bits.length ? bits.join(" • ") : "";
+                return `
+                  <div class="row" style="align-items:center; gap:10px;">
+                    ${img}
+                    <div class="stack" style="gap:2px; flex:1;">
+                      <div class="title">${title}</div>
+                      <div class="sub">${author || `<span class="muted">Unknown author</span>`}</div>
+                      ${line ? `<div class="sub muted">${line}</div>` : ""}
+                    </div>
+                    <button class="btn primary" type="button" data-action="meta:pick_openlibrary" data-cand-idx="${i}">Preview</button>
+                  </div>
+                `;
+              })
+              .join("")}
+          </div>
+          <div style="height:10px;"></div>
+          <button class="btn" type="button" data-action="meta:cancel_openlibrary">Cancel</button>
+        </div>
+      `
+      : "";
   const metaCandidatePreview =
     metaStatus === "preview" && cand
       ? `
         <div class="inlinePrompt" data-kind="openlibrary-preview" style="margin-top:12px;">
-          <div class="muted">Preview (best match)</div>
+          <div class="muted">Preview</div>
           <div class="row" style="align-items:center; gap:10px; margin-top:8px;">
             ${
               cand.cover_url
@@ -968,6 +1016,7 @@ function renderDetail(state) {
           metaBtnLabel
         )}</button>
       </div>
+      ${metaCandidatePick}
       ${metaCandidatePreview}
     </div>
   `;
