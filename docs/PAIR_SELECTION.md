@@ -20,7 +20,8 @@ Given a target item T (e.g., newly finished, or focus item in a sprint):
 
 ## Session modes
 - **Mic check (10 comparisons)**: cycle through multiple target items, weighted toward newest/least-compared items.
-- **After finish (3 comparisons)**: 2 near-neighbor + 1 anchor.
+- **After finish (3 comparisons)**: placement for an unplaced finished item (2 near-neighbor + 1 anchor).
+- **Re-check (3 comparisons)**: tighten an already-rated item when it feels off (same pairing pattern; does not affect placement derivation).
 
 ### Optional (measure-first): after_finish sentiment pre-step
 If after-finish completion time remains high even after Compare input polish, consider a tiny pre-step:

@@ -29,3 +29,12 @@ This file is the single source of truth for how we build here. It applies to hum
 ## Diff Hygiene
 - Separate behavior changes from formatting/regen.
 - Keep curve parameters in one place; do not duplicate magic numbers across UI and server.
+
+## Learning loop (optional, for any coding agent)
+- Default to **build mode**: ship the slice with tests/verification; don’t pause to teach unless asked.
+- Use **learn mode** when requested: ask one question at a time; require an explain-back before moving on.
+- In build mode, add a **5‑minute retro** only when there’s friction (confusing, slow, or surprising) (what changed, why, verification, surprises, next time).
+- When using tools/commands, briefly state what will run, what it will read/write, and the rollback path.
+- Prefer updating durable docs/checklists over leaving “wisdom” trapped in chat history.
+
+See: docs/LEARNING_WITH_AGENTS.md

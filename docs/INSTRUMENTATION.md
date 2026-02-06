@@ -2,10 +2,15 @@
 
 Purpose: tune delight (curve + hysteresis) using real traces.
 
+## Where it lives (repo)
+- Stored locally in IndexedDB (`checkcheck` DB, `events` store).
+- Export via the footer action “Export trace” (downloads JSON).
+- Clear via “Clear trace” (for fresh runs).
+
 ## Events (local-first is fine)
 - comparison_made { session_id, a_id, b_id, winner|skip, time_to_decide_ms }
 - comparison_undo { session_id }
-- compare_session_started { mode: mic_check|after_finish }
+- compare_session_started { mode: mic_check|after_finish|recheck }
 - compare_session_completed { mode, comparisons_count, duration_ms }
 - compare_input { session_id, input: card|button, winner: a|b|skip|undo }
 - compare_pending_lock_blocked { session_id, action: win|skip|undo }

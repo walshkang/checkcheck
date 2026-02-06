@@ -107,7 +107,9 @@ function renderFooter(state) {
       </div>
       <div class="row" style="gap:12px;">
         <button class="link" data-action="export">Export JSON</button>
+        <button class="link" data-action="trace:export">Export trace</button>
         <button class="link" data-action="import:open">Import…</button>
+        <button class="link" data-action="trace:clear">Clear trace</button>
         <button class="link" data-action="dev:resetDerived">Reset display</button>
         <button class="link" data-action="dev:wipeAll">Clear local data</button>
       </div>
@@ -506,7 +508,7 @@ function renderCompare(state) {
   const { session } = state;
   const sessionComparisons = session ? state.comparisons.filter((c) => c.session_id === session.session_id) : [];
   const stepsDone =
-    session?.mode === "after_finish"
+    session?.mode === "after_finish" || session?.mode === "recheck"
       ? sessionComparisons.filter((c) => c.winner_item_id != null).length
       : sessionComparisons.length;
   const stepsTotal = session?.steps_total ?? 10;
@@ -542,6 +544,21 @@ function renderCompare(state) {
     `;
   }
 
+  if (stepsLeft === 0 && session.mode === "recheck") {
+    return `
+      <div class="card signalContainer" data-kind="rechecked">
+        <div class="kicker">Re-check</div>
+        <h2>Re-checked.</h2>
+        <div class="muted">Your shelf updates from comparisons.</div>
+        <div style="height:12px;"></div>
+        <div class="btns">
+          <button class="btn primary" data-action="recheck:back_to_detail">Back to book</button>
+          <button class="btn" data-action="nav:library">Back to library</button>
+        </div>
+      </div>
+    `;
+  }
+
   if (stepsLeft === 0) {
     return `
       <div class="card signalContainer" data-kind="signal-found">
@@ -559,7 +576,8 @@ function renderCompare(state) {
 
   const pair = state.currentPair;
   if (!pair) {
-    const title = session.mode === "after_finish" ? "Place this book" : "Mic check";
+    const title =
+      session.mode === "after_finish" ? "Place this book" : session.mode === "recheck" ? "Re-check" : "Mic check";
     return `
       <div class="card">
         <h2>${title}</h2>
@@ -580,18 +598,26 @@ function renderCompare(state) {
   const starsA = showStars ? renderStars(derivedA?.stars_display ?? null) : "";
   const starsB = showStars ? renderStars(derivedB?.stars_display ?? null) : "";
 
+  const targetId = session.target_item_id ?? null;
+  const isTargetA = !!targetId && pair.a === targetId;
+  const isTargetB = !!targetId && pair.b === targetId;
+  const targetBadgeA = isTargetA ? `<div class="targetPill" data-kind="compare-target">This book</div>` : "";
+  const targetBadgeB = isTargetB ? `<div class="targetPill" data-kind="compare-target">This book</div>` : "";
+
   const cardClassA =
     "compareCard" +
+    (isTargetA ? " isTarget" : "") +
     (isPending && pendingWinner === "a" ? " isChosen" : "") +
     (isPending && pendingWinner && pendingWinner !== "a" ? " isDimmed" : "") +
     (isPending && !pendingWinner ? " isDimmed" : "");
   const cardClassB =
     "compareCard" +
+    (isTargetB ? " isTarget" : "") +
     (isPending && pendingWinner === "b" ? " isChosen" : "") +
     (isPending && pendingWinner && pendingWinner !== "b" ? " isDimmed" : "") +
     (isPending && !pendingWinner ? " isDimmed" : "");
 
-  const kicker = session.mode === "after_finish" ? "Placement" : "Mic check";
+  const kicker = session.mode === "after_finish" ? "Placement" : session.mode === "recheck" ? "Re-check" : "Mic check";
 
   return `
 		    <div class="card">
@@ -604,13 +630,19 @@ function renderCompare(state) {
 	      </div>
       <div style="height:12px;"></div>
 	        <div class="compareCards${enter}">
-	          <div class="${cardClassA}" data-action="compare:win" data-winner="a" role="button" aria-label="Choose A">
+	          <div class="${cardClassA}" data-action="compare:win" data-winner="a" role="button" aria-label="Choose A${
+              isTargetA ? " (this book)" : ""
+            }">
+              ${targetBadgeA}
 	            <div class="title">${itemTitle(itemA)}</div>
 	            ${itemAuthor(itemA) ? `<div class="authorLine">${itemAuthor(itemA)}</div>` : ""}
 	            <div class="sub">Relative to your library.</div>
 	          ${starsA ? `<div style="height:10px;"></div>${starsA}` : ""}
 	          </div>
-	          <div class="${cardClassB}" data-action="compare:win" data-winner="b" role="button" aria-label="Choose B">
+	          <div class="${cardClassB}" data-action="compare:win" data-winner="b" role="button" aria-label="Choose B${
+              isTargetB ? " (this book)" : ""
+            }">
+              ${targetBadgeB}
 	            <div class="title">${itemTitle(itemB)}</div>
 	            ${itemAuthor(itemB) ? `<div class="authorLine">${itemAuthor(itemB)}</div>` : ""}
 	            <div class="sub">Relative to your library.</div>
@@ -846,7 +878,7 @@ function renderDetail(state) {
 	        }
 	        <button class="btn primary" data-action="start:focus" data-item-id="${escapeHtml(itemId)}" ${
 	          isActiveFinished && decidedComparisonsCount > 0 ? "" : "disabled"
-	        }>Check</button>
+	        }>${isRated ? "Re-check" : "Check"}</button>
 	      </div>
 	    </div>
 	  `;

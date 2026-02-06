@@ -1,5 +1,5 @@
 const DB_NAME = "checkcheck";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const SCHEMA_VERSION = "v1";
 
@@ -9,6 +9,8 @@ export const STORES = {
   comparisons: "comparisons",
   uiState: "ui_state"
 };
+
+const EVENTS_STORE = "events";
 
 function reqToPromise(req) {
   return new Promise((resolve, reject) => {
@@ -32,6 +34,12 @@ function openDb() {
     }
     if (!db.objectStoreNames.contains(STORES.uiState)) {
       db.createObjectStore(STORES.uiState, { keyPath: "key" });
+    }
+    // Instrumentation events are ephemeral (not durable truth) but useful for tuning/latency work.
+    if (!db.objectStoreNames.contains(EVENTS_STORE)) {
+      const s = db.createObjectStore(EVENTS_STORE, { keyPath: "id", autoIncrement: true });
+      s.createIndex("created_at", "created_at", { unique: false });
+      s.createIndex("type", "type", { unique: false });
     }
   };
   return reqToPromise(req);
@@ -298,8 +306,9 @@ export async function resetDerivedState() {
 }
 
 export async function wipeAllData() {
-  return withTx(Object.values(STORES), "readwrite", async (s) => {
+  return withTx([...Object.values(STORES), EVENTS_STORE], "readwrite", async (s) => {
     for (const name of Object.values(STORES)) s[name].clear();
+    s[EVENTS_STORE].clear();
   });
 }
 
@@ -344,4 +353,75 @@ export async function bulkAddItemsAndEntries({ items = [], libraryEntries = [] }
     for (const it of items) s[STORES.items].put(it);
     for (const e of libraryEntries) s[STORES.libraryEntries].put(e);
   });
+}
+
+const DEFAULT_EVENTS_LIMIT = 1000;
+
+export async function addEvent({ type, data = null, session_id = null, created_at = null } = {}) {
+  const row = {
+    type: String(type || "").trim() || "event",
+    data: data ?? null,
+    session_id: session_id ?? null,
+    created_at: created_at ?? new Date().toISOString()
+  };
+
+  const id = await withTx([EVENTS_STORE], "readwrite", async (s) =>
+    reqToPromise(s[EVENTS_STORE].add(row))
+  );
+
+  // Cap size (best-effort).
+  // Do pruning occasionally to avoid slowing down Compare interactions.
+  if (id % 50 === 0) {
+    await withTx([EVENTS_STORE], "readwrite", async (s) => {
+      const all = await reqToPromise(s[EVENTS_STORE].getAll());
+      const limit = DEFAULT_EVENTS_LIMIT;
+      if (all.length <= limit) return;
+      all.sort((a, b) => {
+        const ca = a?.created_at ?? "";
+        const cb = b?.created_at ?? "";
+        if (ca < cb) return -1;
+        if (ca > cb) return 1;
+        const ia = a?.id ?? 0;
+        const ib = b?.id ?? 0;
+        return ia < ib ? -1 : ia > ib ? 1 : 0;
+      });
+      const toDelete = all.slice(0, all.length - limit);
+      for (const r of toDelete) s[EVENTS_STORE].delete(r.id);
+    });
+  }
+
+  return { ...row, id };
+}
+
+export async function listEvents({ limit = 200 } = {}) {
+  const n = Math.max(0, Math.min(DEFAULT_EVENTS_LIMIT, Number(limit) || 0));
+  return withTx([EVENTS_STORE], "readonly", async (s) => {
+    const all = await reqToPromise(s[EVENTS_STORE].getAll());
+    all.sort((a, b) => {
+      const ca = a?.created_at ?? "";
+      const cb = b?.created_at ?? "";
+      if (ca > cb) return -1;
+      if (ca < cb) return 1;
+      const ia = a?.id ?? 0;
+      const ib = b?.id ?? 0;
+      return ia > ib ? -1 : ia < ib ? 1 : 0;
+    });
+    return n ? all.slice(0, n) : [];
+  });
+}
+
+export async function clearEvents() {
+  return withTx([EVENTS_STORE], "readwrite", async (s) => {
+    s[EVENTS_STORE].clear();
+  });
+}
+
+export async function exportEvents({ app = null } = {}) {
+  const events = await listEvents({ limit: DEFAULT_EVENTS_LIMIT });
+  return {
+    schema_version: "events_v1",
+    exported_at: new Date().toISOString(),
+    app: app ?? null,
+    events
+  };
 }

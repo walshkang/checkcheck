@@ -59,6 +59,9 @@ export async function startApp() {
 	    detailItemId: null,
 	    session: null,
 	    currentPair: null,
+    currentStepIndex: 0,
+    currentPairKey: null,
+    currentPairShownAt: null,
 		    toast: null,
 
 	    showArchived: false,
@@ -75,8 +78,9 @@ export async function startApp() {
     searchError: null,
     searchRequestId: 0,
 
-	    comparePending: null, // { action: "win"|"skip"|"undo", winner: "a"|"b"|null, at: number }
+    comparePending: null, // { action: "win"|"skip"|"undo", winner: "a"|"b"|null, at: number }
     compareEnterAt: 0,
+    lastCompareInput: null, // { input: "card"|"button"|"unknown", action: "win"|"skip"|"undo", winner: "a"|"b"|null, at: number }
 
 	    importFlow: null, // { kind, provider, fileName, ... }
     postImportMicCheckPrompt: null, // { at: number }
@@ -84,6 +88,13 @@ export async function startApp() {
     detailOpenLibraryStatus: "idle", // idle | loading | preview
     detailOpenLibraryCandidate: null // normalized OL result
   };
+
+  function logEvent(type, data, { sessionId = null } = {}) {
+    const sid = sessionId ?? state.session?.session_id ?? null;
+    void idb
+      .addEvent({ type, data: data ?? null, session_id: sid })
+      .catch(() => {});
+  }
 
   function setToast(msg, { hint = null, ms = 2500 } = {}) {
     const id = crypto.randomUUID();
@@ -234,6 +245,7 @@ export async function startApp() {
 	  function updateCurrentPair() {
 	    if (!state.session) {
 	      state.currentPair = null;
+      state.currentStepIndex = 0;
 	      return;
 	    }
 	    const activeSet = new Set(state.finishedIds);
@@ -242,9 +254,10 @@ export async function startApp() {
 	    );
 	    const sessionComparisons = state.comparisons.filter((c) => c.session_id === state.session.session_id);
 	    const stepIndex =
-	      state.session.mode === "after_finish"
+	      state.session.mode === "after_finish" || state.session.mode === "recheck"
 	        ? sessionComparisons.filter((c) => c.winner_item_id != null).length
 	        : sessionComparisons.length;
+    state.currentStepIndex = stepIndex;
 	    const usedOpponentIds = new Set();
 	    const targetId = state.session.target_item_id;
 	    if (targetId) {
@@ -268,6 +281,14 @@ export async function startApp() {
   function render() {
     rebuildSelectors();
     updateCurrentPair();
+    if (state.surface === "compare" && state.session && state.currentPair && !state.comparePending) {
+      const { a, b } = state.currentPair;
+      const key = `${state.session.session_id}:${state.session.mode}:${state.currentStepIndex}:${a}:${b}`;
+      if (key !== state.currentPairKey) {
+        state.currentPairKey = key;
+        state.currentPairShownAt = Date.now();
+      }
+    }
     root.innerHTML = renderApp(state);
   }
 
@@ -716,17 +737,50 @@ export async function startApp() {
 	      is_initial: mode === "mic_check" && decidedComparisonsCount === 0,
 	      steps_total: stepsTotal,
 	      target_item_id: targetItemId,
-	      started_at: nowIso()
+	      started_at: nowIso(),
+      completed_at: null
 	    };
+    state.currentPairKey = null;
+    state.currentPairShownAt = null;
+    logEvent("compare_session_started", {
+      mode,
+      steps_total: stepsTotal,
+      target_item_id: targetItemId ?? null,
+      is_initial: !!state.session.is_initial
+    });
 	    setSurface("compare");
 	    render();
 	  }
 
-  async function handleCompare({ winner }) {
+  function maybeLogSessionCompleted() {
+    const s = state.session;
+    if (!s || s.completed_at) return;
+    const sessionComparisons = state.comparisons.filter((c) => c.session_id === s.session_id);
+    const stepsDone =
+      s.mode === "after_finish" || s.mode === "recheck"
+        ? sessionComparisons.filter((c) => c.winner_item_id != null).length
+        : sessionComparisons.length;
+    if (stepsDone < (s.steps_total ?? 0)) return;
+
+    s.completed_at = nowIso();
+    const startedMs = Date.parse(s.started_at);
+    const durationMs = Number.isFinite(startedMs) ? Date.now() - startedMs : null;
+    logEvent("compare_session_completed", {
+      mode: s.mode,
+      comparisons_count: stepsDone,
+      duration_ms: durationMs
+    });
+  }
+
+  async function handleCompare({ winner, input = "unknown" }) {
     if (!state.session || !state.currentPair) return;
     if (state.comparePending) return;
     const { a, b } = state.currentPair;
     const winnerId = winner === "a" ? a : winner === "b" ? b : null;
+
+    const actionAt = Date.now();
+    const timeToDecideMs =
+      typeof state.currentPairShownAt === "number" ? Math.max(0, actionAt - state.currentPairShownAt) : null;
 
     state.compareEnterAt = 0;
     state.comparePending = { action: winnerId ? "win" : "skip", winner: winner ?? null, at: Date.now() };
@@ -742,14 +796,28 @@ export async function startApp() {
       state.comparisons.push(c);
       // Bootstrap ratings only on *decided* comparisons. A Skip should not resurrect ratings after "Reset display".
       await recomputeAndPersistWithBootstrap(winnerId ? [a, b] : []);
+      logEvent("comparison_made", {
+        mode: state.session.mode,
+        a_id: a,
+        b_id: b,
+        winner: winner ?? null,
+        winner_item_id: winnerId ?? null,
+        input,
+        time_to_decide_ms: timeToDecideMs
+      });
+      maybeLogSessionCompleted();
     } finally {
+      const tapToNextMs = Math.max(0, Date.now() - actionAt);
+      if (state.session) {
+        logEvent("compare_tap_to_next", { mode: state.session.mode, input, tap_to_next_ms: tapToNextMs });
+      }
       state.comparePending = null;
       state.compareEnterAt = Date.now();
       render();
     }
   }
 
-  async function handleUndo() {
+  async function handleUndo({ input = "unknown" } = {}) {
     if (state.comparePending) return;
     state.compareEnterAt = 0;
     state.comparePending = { action: "undo", winner: null, at: Date.now() };
@@ -760,6 +828,7 @@ export async function startApp() {
       state.comparisons = state.comparisons.filter((c) => c.id !== deleted.id);
       // Undo should not bootstrap ratings either; just recompute from truth.
       await recomputeAndPersistWithBootstrap([]);
+      logEvent("comparison_undo", { mode: state.session?.mode ?? null, input });
     } finally {
       state.comparePending = null;
       state.compareEnterAt = Date.now();
@@ -771,6 +840,18 @@ export async function startApp() {
     const data = await idb.exportAllData({ curveVersion: CURVE_VERSION });
     const ts = new Date().toISOString().replaceAll(":", "").replaceAll("-", "").slice(0, 15);
     downloadJson(`checkcheck-export-${ts}.json`, data);
+  }
+
+  async function handleExportTrace() {
+    const data = await idb.exportEvents({ app: { curve_version: CURVE_VERSION } });
+    const ts = new Date().toISOString().replaceAll(":", "").replaceAll("-", "").slice(0, 15);
+    downloadJson(`checkcheck-trace-${ts}.json`, data);
+  }
+
+  async function handleClearTrace() {
+    if (!confirm("Clear trace?")) return;
+    await idb.clearEvents();
+    setToast("Trace cleared.");
   }
 
   async function handleImport(file) {
@@ -1030,10 +1111,17 @@ export async function startApp() {
 	    if (!el) return;
 	    const action = el.getAttribute("data-action");
 	    if (!action) return;
-	    if (state.comparePending && (action === "compare:win" || action === "compare:skip" || action === "compare:undo")) return;
+	    if (state.comparePending && (action === "compare:win" || action === "compare:skip" || action === "compare:undo")) {
+      logEvent("compare_pending_lock_blocked", {
+        action: action === "compare:win" ? "win" : action === "compare:skip" ? "skip" : "undo"
+      });
+      return;
+    }
 
 	    if (action === "nav:library") return setSurface("library"), render();
 	    if (action === "export") return void handleExport().catch((e) => alert(String(e)));
+    if (action === "trace:export") return void handleExportTrace().catch((e) => alert(String(e)));
+    if (action === "trace:clear") return void handleClearTrace().catch((e) => alert(String(e)));
 
 		    if (action === "library:view") {
 		      const view = el.getAttribute("data-view");
@@ -1118,7 +1206,10 @@ export async function startApp() {
 	        state.finishPromptItemId = null;
 	        state.finishPromptToken = null;
       }
-	      return startSession({ stepsTotal: 3, mode: "after_finish", targetItemId: itemId });
+      const d = state.derivedById.get(itemId);
+      const isRated = d?.stars_display != null;
+      const mode = isRated ? "recheck" : "after_finish";
+	      return startSession({ stepsTotal: 3, mode, targetItemId: itemId });
 	    }
 
 		    if (action === "after_finish:back_to_finished") {
@@ -1128,13 +1219,35 @@ export async function startApp() {
 		      return;
 		    }
 
+    if (action === "recheck:back_to_detail") {
+      const targetId = state.session?.target_item_id;
+      if (!targetId) return;
+      state.detailItemId = targetId;
+      setSurface("detail");
+      render();
+      return;
+    }
+
     if (action === "compare:win") {
       const winner = el.getAttribute("data-winner");
       if (winner !== "a" && winner !== "b") return;
-      return void handleCompare({ winner }).catch((e) => alert(String(e)));
+      const input = el.classList.contains("compareCard") ? "card" : "button";
+      state.lastCompareInput = { input, action: "win", winner, at: Date.now() };
+      logEvent("compare_input", { input, winner, action: "win" });
+      return void handleCompare({ winner, input }).catch((e) => alert(String(e)));
     }
-    if (action === "compare:skip") return void handleCompare({ winner: null }).catch((e) => alert(String(e)));
-    if (action === "compare:undo") return void handleUndo().catch((e) => alert(String(e)));
+    if (action === "compare:skip") {
+      const input = el.classList.contains("compareCard") ? "card" : "button";
+      state.lastCompareInput = { input, action: "skip", winner: null, at: Date.now() };
+      logEvent("compare_input", { input, winner: "skip", action: "skip" });
+      return void handleCompare({ winner: null, input }).catch((e) => alert(String(e)));
+    }
+    if (action === "compare:undo") {
+      const input = el.classList.contains("compareCard") ? "card" : "button";
+      state.lastCompareInput = { input, action: "undo", winner: null, at: Date.now() };
+      logEvent("compare_input", { input, winner: "undo", action: "undo" });
+      return void handleUndo({ input }).catch((e) => alert(String(e)));
+    }
 
     if (action === "open:detail") {
       const itemId = el.getAttribute("data-item-id");

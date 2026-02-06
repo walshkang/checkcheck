@@ -148,7 +148,7 @@ export function pickPair({
     return opponentPool.length ? { a, b: opponentPool[0] } : null;
   }
 
-  if (mode === "after_finish" && targetId && finishedIds.includes(targetId)) {
+  if ((mode === "after_finish" || mode === "recheck") && targetId && finishedIds.includes(targetId)) {
     const used = usedOpponentIds instanceof Set ? usedOpponentIds : new Set(usedOpponentIds || []);
     let candidates = finishedIds.filter((id) => id !== targetId && !used.has(id));
     if (!candidates.length) candidates = finishedIds.filter((id) => id !== targetId);

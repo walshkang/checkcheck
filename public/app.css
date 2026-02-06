@@ -416,6 +416,24 @@ button.chip:hover {
   transition: transform 140ms ease, opacity 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
 }
 
+.compareCard.isTarget {
+  border-color: rgba(27, 111, 90, 0.22);
+  box-shadow: 0 0 0 2px rgba(27, 111, 90, 0.06);
+}
+
+.targetPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(27, 111, 90, 0.25);
+  background: rgba(27, 111, 90, 0.06);
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 12px;
+  color: rgba(27, 111, 90, 0.92);
+  margin-bottom: 10px;
+}
+
 .compareCard:active {
   transform: scale(0.992);
 }

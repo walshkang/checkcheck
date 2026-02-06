@@ -65,6 +65,8 @@ test("Unplaced queue is durable, locked/unlocked correctly, and shrinks after pl
   // Place a specific book (3 decided picks).
   const pickedTitle = await clickFirstUnplacedCta(page);
   await expect(page.locator('[data-action="compare:skip"]')).toBeVisible();
+  await expect(page.locator(".compareCard.isTarget")).toHaveCount(1);
+  await expect(page.locator(".compareCard.isTarget")).toContainText(pickedTitle);
   await winA(page);
   await winA(page);
   await winA(page);
