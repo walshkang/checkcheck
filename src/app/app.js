@@ -738,9 +738,8 @@ export async function startApp() {
 
 			    form.reset();
 			    if (intent === "finished") {
-            setLibraryTab("ranking", { touched: false, renderNow: false });
 			      state.libraryView = "unplaced";
-			      await handleSetStatus(item.id, "finished");
+			      await handleSetStatus(item.id, "finished", { keepTab: true });
 			      return;
 			    }
 			    render();
@@ -820,6 +819,7 @@ export async function startApp() {
 	    const r = state.searchResults[idx];
 	    if (!r) return;
 	    const intent = targetStatus === "finished" ? "finished" : "want";
+      const keepTab = state.libraryTab === "add";
 
 	    const sourceKey = r?.source?.provider === "openlibrary" ? r.source.key : null;
 	    if (sourceKey) {
@@ -832,13 +832,13 @@ export async function startApp() {
 		          await handleRestore(existing.id);
 		          if (intent === "finished" && entry?.status !== "finished") {
 		            state.libraryView = "unplaced";
-		            await handleSetStatus(existing.id, "finished");
+		            await handleSetStatus(existing.id, "finished", { keepTab });
 		          }
 		          return;
 		        }
 		        if (intent === "finished" && entry?.status !== "finished") {
 		          state.libraryView = "unplaced";
-		          await handleSetStatus(existing.id, "finished");
+		          await handleSetStatus(existing.id, "finished", { keepTab });
 		          setToast("Marked finished.", { hint: "Ready to place when you are." });
 		          return;
 		        }
@@ -856,13 +856,13 @@ export async function startApp() {
 		          await handleRestore(existing.id);
 		          if (intent === "finished" && entry?.status !== "finished") {
 		            state.libraryView = "unplaced";
-		            await handleSetStatus(existing.id, "finished");
+		            await handleSetStatus(existing.id, "finished", { keepTab });
 		          }
 		          return;
 		        }
 		        if (intent === "finished" && entry?.status !== "finished") {
 		          state.libraryView = "unplaced";
-		          await handleSetStatus(existing.id, "finished");
+		          await handleSetStatus(existing.id, "finished", { keepTab });
 		          setToast("Marked finished.", { hint: "Ready to place when you are." });
 		          return;
 		        }
@@ -892,9 +892,8 @@ export async function startApp() {
 	    setToast("Added.", { hint: "Ratings are relative to your library." });
 
 			    if (intent === "finished") {
-            setLibraryTab("ranking", { touched: false, renderNow: false });
 			      state.libraryView = "unplaced";
-			      await handleSetStatus(item.id, "finished");
+			      await handleSetStatus(item.id, "finished", { keepTab });
 			    }
 			  }
 
@@ -1024,7 +1023,7 @@ export async function startApp() {
     setToast("Edition updated.", { hint: "Does not affect ranking." });
   }
 
-		  async function handleSetStatus(itemId, status) {
+		  async function handleSetStatus(itemId, status, { keepTab = false } = {}) {
 	    const prev = state.libraryByItemId.get(itemId);
 	    const entry = await idb.setLibraryStatus(itemId, status);
 	    state.libraryByItemId.set(itemId, entry);
@@ -1035,11 +1034,11 @@ export async function startApp() {
 		    const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
 		    if (entry.status === "finished" && !entry.archived_at && decidedComparisonsCount > 0) {
 		      state.libraryView = "unplaced";
-		      setLibraryTab("ranking", { renderNow: false, preserveView: true });
+		      if (!keepTab) setLibraryTab("ranking", { renderNow: false, preserveView: true });
 		    }
 		    if (entry.status === "want" || entry.status === "reading") {
 		      state.libraryView = "want";
-		      setLibraryTab("want", { renderNow: false, preserveView: true });
+		      if (!keepTab) setLibraryTab("want", { renderNow: false, preserveView: true });
 		    }
 
 		    // When the user marks an item finished, show a temporary inline prompt to do 3 comparisons.

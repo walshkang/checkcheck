@@ -24,10 +24,24 @@ async function addFinishedManual(page, title) {
     await details.locator("summary").click();
     await expect(form).toBeVisible();
   }
+  const footer = page.locator(".footer").first();
+  const beforeText = (await footer.textContent()) ?? "";
+  const beforeMatch = beforeText.match(/Finished:\s*(\d+)/);
+  const before = beforeMatch ? Number(beforeMatch[1]) : null;
+
   await form.locator('input[name="title"]').fill(title);
   await form.locator('input[name="author"]').fill("Author");
   await form.locator('button[type="submit"][data-intent="finished"]').click();
-  await expect(page.locator('.list-item[data-kind="library-item"]', { hasText: title })).toBeVisible();
+  // Stay in Add tab after adding (mobile should not navigate away from Search/Add).
+  await expect(page.locator('[data-kind="tabbar"] button[data-tab="add"]')).toHaveAttribute("aria-current", "page");
+
+  if (before != null) {
+    await expect.poll(async () => {
+      const t = (await footer.textContent()) ?? "";
+      const m = t.match(/Finished:\s*(\d+)/);
+      return m ? Number(m[1]) : null;
+    }).toBe(before + 1);
+  }
 }
 
 test("Mobile bottom tabs switch Library sections and hide during Compare", async ({ page }) => {
@@ -53,8 +67,8 @@ test("Mobile bottom tabs switch Library sections and hide during Compare", async
     await addFinishedManual(page, `Finished ${i}`);
   }
 
+  await selectTab(page, "ranking");
   await page.locator('[data-kind="onboarding-init"] [data-action="start:miccheck"]').click();
   await expect(page.locator('[data-action="compare:skip"]')).toBeVisible();
   await expect(page.locator('[data-kind="tabbar"]')).toHaveCount(0);
 });
-
