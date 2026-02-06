@@ -28,12 +28,19 @@ Avoid:
 
 ## UI labels (recommended)
 ### Primary navigation / surfaces
-- **Library**
-- **Mic check**
-- **Profile** (later; Phase 1 can omit)
+- Phase 1:
+  - **Library**
+  - **Mic check**
+  - **Profile** (later; Phase 1 can omit)
+- Phase 2+ (mobile bottom tabs):
+  - **Add book**
+  - **Want to read**
+  - **My library ranking**
+  - **Discover**
 
 ### Library sub-views
 - **Want to read**
+- **Unplaced**
 - **Finished**
 
 ### Compare screen

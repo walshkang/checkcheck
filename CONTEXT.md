@@ -1,6 +1,6 @@
 # CONTEXT.md — checkcheck
 
-Last updated: 2026-02-04
+Last updated: 2026-02-06
 
 ## Active Phase
 **Phase 1 — checkcheck MVP (Books Only)**
@@ -24,7 +24,7 @@ Goal: validate that reviewing against yourself via fast A/B comparisons is delig
 Mobile rule: **only one primary surface at a time** (Compare > Detail > Library).
 
 ## Current Shape (shipped)
-- Library has two sub-views: **Want to read** (saved queue) and **Finished** (rated history).
+- Library has three sub-views: **Want to read** (saved queue), **Unplaced** (finished but not yet rated), and **Finished** (rated history).
 - Compare is gated until **5 active finished** items exist.
 - Initial mic check hides stars during comparisons; stars render after initiation.
 - Stars display uses quarter steps (0.25) and is rendered via SVG for clarity.

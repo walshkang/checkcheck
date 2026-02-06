@@ -1,6 +1,6 @@
 # checkcheck
 
-Mic-check your taste: comparisons-first personal ratings for books (Phase 1), expandable to films + restaurants (Phase 2+).
+Mic-check your taste: comparisons-first personal ratings for books (Phase 1), expandable to films + restaurants (Phase 4+).
 
 ## What this is
 A web-first app that learns your taste by asking quick A/B questions ("which did you like more?"), then derives:
@@ -24,7 +24,13 @@ A web-first app that learns your taste by asking quick A/B questions ("which did
 1. `python3 -m http.server 8000`
 2. Open `http://localhost:8000/public/`
 
-## Phase 2 (later)
-- Cross-domain taxonomy
-- Similarity models (kNN, RF/GBDT baselines)
-- Cross-domain recommendations
+## Phase 2 (planned)
+- Mobile-first UX + bottom tabs (Add book / Want to read / My library ranking / Discover stub)
+- Compare feedback polish + instrument panel feel
+- Elo tuning (after UX is squared away)
+
+## Phase 3 (planned)
+- Discover (books): explainable preference signals + recommendations (“why this”)
+
+## Phase 4 (later)
+- Cross-domain expansion (films/restaurants) + similarity models
