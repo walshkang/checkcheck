@@ -68,6 +68,7 @@
           "outcome": "User can build a personal library quickly and confidently.",
           "scope": [
             "Manual add (title, author) as baseline.",
+            "Import from Goodreads/StoryGraph (CSV) via unified Import entry; store legacy ratings/reviews for provenance but never use or show them in ranking UI.",
             "Optional: external search integration (later) behind a flag.",
             "Statuses: want / reading / finished; finished_at.",
             "Library sub-views: Want to read (saved queue) vs Finished (rated history).",

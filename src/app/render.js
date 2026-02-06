@@ -107,7 +107,7 @@ function renderFooter(state) {
       </div>
       <div class="row" style="gap:12px;">
         <button class="link" data-action="export">Export JSON</button>
-        <button class="link" data-action="import:open">Import JSON</button>
+        <button class="link" data-action="import:open">Import…</button>
         <button class="link" data-action="dev:resetDerived">Reset display</button>
         <button class="link" data-action="dev:wipeAll">Clear local data</button>
       </div>
@@ -115,10 +115,79 @@ function renderFooter(state) {
 		  `;
 	}
 
+function providerLabel(provider) {
+  if (provider === "goodreads") return "Goodreads";
+  if (provider === "storygraph") return "StoryGraph";
+  return "CSV export";
+}
+
+function renderImportFlow(state) {
+  const flow = state.importFlow;
+  if (!flow) return "";
+
+  if (flow.kind === "checkcheck_json") {
+    return `
+      <div class="banner" data-kind="import-flow">
+        <div class="title">Import checkcheck JSON</div>
+        <div class="sub">This replaces local data on this device.</div>
+        <div style="height:10px;"></div>
+        <div class="row" style="justify-content:flex-start; gap:10px; flex-wrap:wrap;">
+          <button class="btn primary" type="button" data-action="import:apply">Replace local data</button>
+          <button class="btn" type="button" data-action="import:cancel">Cancel</button>
+        </div>
+      </div>
+      <div style="height:12px;"></div>
+    `;
+  }
+
+  if (flow.kind === "csv_export") {
+    const books = Array.isArray(flow.books) ? flow.books : [];
+    const counts = { want: 0, reading: 0, finished: 0 };
+    for (const b of books) counts[b?.status] = (counts[b?.status] ?? 0) + 1;
+    const total = books.length;
+    return `
+      <div class="banner" data-kind="import-flow">
+        <div class="title">Import ${providerLabel(flow.provider)} CSV</div>
+        <div class="sub">${total} books · Want ${counts.want ?? 0} · Reading ${counts.reading ?? 0} · Finished ${
+          counts.finished ?? 0
+        }</div>
+        <div style="height:10px;"></div>
+        <div class="row" style="justify-content:flex-start; gap:10px; flex-wrap:wrap;">
+          <button class="btn primary" type="button" data-action="import:apply" ${total ? "" : "disabled"}>Import</button>
+          <button class="btn" type="button" data-action="import:cancel">Cancel</button>
+        </div>
+        <div style="height:8px;"></div>
+        <div class="muted">Legacy ratings/reviews are saved but never used for checkcheck ranking.</div>
+      </div>
+      <div style="height:12px;"></div>
+    `;
+  }
+
+  return "";
+}
+
+function renderPostImportMicCheckPrompt(state) {
+  if (!state.postImportMicCheckPrompt) return "";
+  return `
+    <div class="banner" data-kind="postimport-miccheck">
+      <div class="title">Start a mic check?</div>
+      <div class="sub">Ten quick picks to rank your shelf. Or review later — your finished books stay unranked until comparisons.</div>
+      <div style="height:10px;"></div>
+      <div class="row" style="justify-content:flex-start; gap:10px; flex-wrap:wrap;">
+        <button class="btn primary" type="button" data-action="postimport:miccheck">Start mic check</button>
+        <button class="btn" type="button" data-action="postimport:later">I’ll review later</button>
+      </div>
+    </div>
+    <div style="height:12px;"></div>
+  `;
+}
+
 function renderLibrary(state) {
   const empty = state.items.length === 0;
   const addLabel = empty ? "Add your first book" : "Add book";
   const searchPanel = renderSearchPanel(state);
+  const importFlow = renderImportFlow(state);
+  const postImportPrompt = renderPostImportMicCheckPrompt(state);
   const archivedCount = state.archivedIds?.length ?? 0;
   const decidedComparisonsCount =
     typeof state.decidedComparisonsCount === "number"
@@ -313,7 +382,7 @@ function renderLibrary(state) {
 	              : ""
 	          }
 	        </div>
-			        <div class="row" style="justify-content:flex-start; gap:8px; margin-bottom:12px;">
+		        <div class="row" style="justify-content:flex-start; gap:8px; margin-bottom:12px;">
 		          <button class="pill" data-action="library:view" data-view="want"${state.libraryView === "want" ? ' aria-current="page"' : ""}>Want to read</button>
 		          <button class="pill" data-action="library:view" data-view="unplaced"${
 		            state.libraryView === "unplaced" ? ' aria-current="page"' : ""
@@ -321,9 +390,11 @@ function renderLibrary(state) {
 		          <button class="pill" data-action="library:view" data-view="finished"${
 		            state.libraryView === "finished" ? ' aria-current="page"' : ""
 		          }>Finished</button>
-			        </div>
-			        ${onboardingBanner}
-			        ${unplacedHeader}
+		        </div>
+		        ${importFlow}
+		        ${postImportPrompt}
+		        ${onboardingBanner}
+		        ${unplacedHeader}
 		        ${
 		          state.items.length === 0
 		            ? `<div class="muted">Add your first book to begin.</div>`
@@ -349,7 +420,7 @@ function renderLibrary(state) {
 
   const q = escapeHtml(state.searchQuery || "");
   const status = state.searchStatus || "idle";
-  const langMode = state.searchLangMode === "any" ? "any" : "prefer_en";
+  const langMode = typeof state.searchLanguage === "string" ? state.searchLanguage : "en";
 
   const header =
     status === "loading"
@@ -360,7 +431,7 @@ function renderLibrary(state) {
           ? `<div class="muted">Search error.</div>`
           : `<div class="muted">Search Open Library</div>`;
 
-	  const results =
+	const results =
 	    state.searchResults?.length
 	      ? `<ul class="list" style="margin-top:10px;">
 	          ${state.searchResults
@@ -410,8 +481,16 @@ function renderLibrary(state) {
     <div style="height:12px;"></div>
     ${header}
     <form class="row" style="gap:8px; margin-top:8px; flex-wrap:wrap;" data-action="search:openlibrary">
-      <select class="input" name="lang_mode" style="min-width: 160px;">
-        <option value="prefer_en" ${langMode === "prefer_en" ? "selected" : ""}>Prefer English</option>
+      <select class="input" name="lang" style="min-width: 180px;">
+        <option value="en" ${langMode === "en" ? "selected" : ""}>English</option>
+        <option value="es" ${langMode === "es" ? "selected" : ""}>Spanish</option>
+        <option value="fr" ${langMode === "fr" ? "selected" : ""}>French</option>
+        <option value="de" ${langMode === "de" ? "selected" : ""}>German</option>
+        <option value="it" ${langMode === "it" ? "selected" : ""}>Italian</option>
+        <option value="pt" ${langMode === "pt" ? "selected" : ""}>Portuguese</option>
+        <option value="ja" ${langMode === "ja" ? "selected" : ""}>Japanese</option>
+        <option value="ko" ${langMode === "ko" ? "selected" : ""}>Korean</option>
+        <option value="zh" ${langMode === "zh" ? "selected" : ""}>Chinese</option>
         <option value="any" ${langMode === "any" ? "selected" : ""}>Any language</option>
       </select>
       <input class="input" name="q" placeholder="Search title or author" autocomplete="off" value="${q}" style="flex: 1; min-width: 220px;" />
@@ -640,6 +719,79 @@ function renderDetail(state) {
     </div>
   `;
 
+  const canUpdateMeta = !isArchived;
+  const metaStatus = state.detailOpenLibraryStatus || "idle";
+  const cand = state.detailOpenLibraryCandidate;
+  const languageCode = typeof state.searchLanguage === "string" ? state.searchLanguage : "en";
+  const languageLabel =
+    {
+      en: "English",
+      es: "Spanish",
+      fr: "French",
+      de: "German",
+      it: "Italian",
+      pt: "Portuguese",
+      ja: "Japanese",
+      ko: "Korean",
+      zh: "Chinese",
+      any: "Any language"
+    }[languageCode] ?? "English";
+  const metaBtnLabel =
+    metaStatus === "loading" ? "Updating…" : metaStatus === "preview" ? "Update metadata (Open Library)" : "Update metadata (Open Library)";
+  const metaBtnDisabled = !canUpdateMeta || metaStatus === "loading";
+  const metaCandidatePreview =
+    metaStatus === "preview" && cand
+      ? `
+        <div class="inlinePrompt" data-kind="openlibrary-preview" style="margin-top:12px;">
+          <div class="muted">Preview (best match)</div>
+          <div class="row" style="align-items:center; gap:10px; margin-top:8px;">
+            ${
+              cand.cover_url
+                ? `<img src="${escapeHtml(cand.cover_url)}" alt="" width="32" height="48" style="border-radius:8px; border:1px solid var(--stroke);" loading="lazy" />`
+                : `<div style="width:32px; height:48px; border-radius:8px; border:1px solid var(--stroke); background: rgba(255,255,255,0.4);"></div>`
+            }
+            <div class="stack" style="gap:2px; flex:1;">
+              <div class="title">${escapeHtml(cand.title || "")}</div>
+              <div class="sub">${escapeHtml(cand.author || "")}${
+                cand.first_publish_year ? ` · <span class="muted">${escapeHtml(cand.first_publish_year)}</span>` : ""
+              }</div>
+            </div>
+          </div>
+          <div class="row" style="justify-content:flex-start; gap:10px; margin-top:10px; flex-wrap:wrap;">
+            <button class="btn primary" type="button" data-action="meta:apply_openlibrary">Apply</button>
+            <button class="btn" type="button" data-action="meta:cancel_openlibrary">Cancel</button>
+          </div>
+          <div class="muted" style="margin-top:8px;">Does not affect checkcheck ranking.</div>
+        </div>
+      `
+      : "";
+
+  const metaSection = `
+    <div style="height:12px;"></div>
+    <div data-kind="detail-meta">
+      <div class="title">Metadata</div>
+      <div class="sub">Covers are for recognition only · Language: ${escapeHtml(languageLabel)}</div>
+      <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:8px; align-items:center;">
+        <select class="input" data-action="lang:set" style="min-width: 180px;">
+          <option value="en" ${languageCode === "en" ? "selected" : ""}>English</option>
+          <option value="es" ${languageCode === "es" ? "selected" : ""}>Spanish</option>
+          <option value="fr" ${languageCode === "fr" ? "selected" : ""}>French</option>
+          <option value="de" ${languageCode === "de" ? "selected" : ""}>German</option>
+          <option value="it" ${languageCode === "it" ? "selected" : ""}>Italian</option>
+          <option value="pt" ${languageCode === "pt" ? "selected" : ""}>Portuguese</option>
+          <option value="ja" ${languageCode === "ja" ? "selected" : ""}>Japanese</option>
+          <option value="ko" ${languageCode === "ko" ? "selected" : ""}>Korean</option>
+          <option value="zh" ${languageCode === "zh" ? "selected" : ""}>Chinese</option>
+          <option value="any" ${languageCode === "any" ? "selected" : ""}>Any language</option>
+        </select>
+        <button class="btn" type="button" data-action="meta:update_openlibrary" ${metaBtnDisabled ? "disabled" : ""}>${escapeHtml(
+          metaBtnLabel
+        )}</button>
+      </div>
+      ${metaCandidatePreview}
+    </div>
+  `;
+
   return `
     <div class="card">
       <div class="row">
@@ -684,6 +836,7 @@ function renderDetail(state) {
       <div style="height:12px;"></div>
       ${typeSection}
       ${tagsSection}
+      ${metaSection}
       <div style="height:12px;"></div>
       <div class="btns">
         ${

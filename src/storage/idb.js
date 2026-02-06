@@ -71,7 +71,9 @@ export async function loadAll() {
 
 function normalizeItem(it) {
   const rawSubjects = Array.isArray(it?.raw_subjects) ? it.raw_subjects : [];
-  return { ...it, raw_subjects: rawSubjects };
+  const legacy = it?.legacy && typeof it.legacy === "object" ? it.legacy : {};
+  const openlibrary = it?.openlibrary && typeof it.openlibrary === "object" ? it.openlibrary : null;
+  return { ...it, raw_subjects: rawSubjects, legacy, openlibrary };
 }
 
 function normalizeLibraryEntry(e) {
@@ -239,6 +241,24 @@ export async function addComparison({
   return { ...row, id };
 }
 
+export async function patchItem(itemId, patch) {
+  const now = new Date().toISOString();
+  return withTx([STORES.items], "readwrite", async (s) => {
+    const prevRaw = await reqToPromise(s[STORES.items].get(itemId));
+    if (!prevRaw) throw new Error("Item not found");
+    const prev = normalizeItem(prevRaw ?? {});
+    const next = normalizeItem({
+      ...(prevRaw ?? {}),
+      ...prev,
+      ...(patch ?? {}),
+      id: itemId,
+      updated_at: now
+    });
+    s[STORES.items].put(next);
+    return next;
+  });
+}
+
 export async function deleteLastComparison() {
   return withTx([STORES.comparisons], "readwrite", async (s) => {
     const all = await reqToPromise(s[STORES.comparisons].getAll());
@@ -313,4 +333,15 @@ export async function exportAllData({ curveVersion }) {
       ui_state: uiState
     }
   };
+}
+
+export async function bulkAddItemsAndEntries({ items = [], libraryEntries = [] } = {}) {
+  if (!Array.isArray(items) || !Array.isArray(libraryEntries)) {
+    throw new Error("bulkAddItemsAndEntries expects arrays");
+  }
+  if (items.length === 0 && libraryEntries.length === 0) return;
+  await withTx([STORES.items, STORES.libraryEntries], "readwrite", async (s) => {
+    for (const it of items) s[STORES.items].put(it);
+    for (const e of libraryEntries) s[STORES.libraryEntries].put(e);
+  });
 }

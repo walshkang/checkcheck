@@ -60,6 +60,8 @@ test("Export -> wipe -> import restores library and comparisons", async ({ page 
     page.locator('[data-action="import:open"]').click()
   ]);
   await chooser.setFiles(outPath);
+  await expect(page.locator('[data-kind="import-flow"]')).toBeVisible();
+  await page.locator('[data-kind="import-flow"] [data-action="import:apply"]').click();
 
   // After import, items should be visible again (either Unplaced or Finished, depending on which were bootstrapped).
   async function expectVisibleInShelf(title) {

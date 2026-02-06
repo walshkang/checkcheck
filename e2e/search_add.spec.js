@@ -93,6 +93,8 @@ test("Search (flagged) -> add -> export contains optional fields -> wipe -> impo
     page.locator('[data-action="import:open"]').click()
   ]);
   await chooser.setFiles(out1);
+  await expect(page.locator('[data-kind="import-flow"]')).toBeVisible();
+  await page.locator('[data-kind="import-flow"] [data-action="import:apply"]').click();
 
   // Export again and confirm optional fields survived round-trip.
   const [download2] = await Promise.all([

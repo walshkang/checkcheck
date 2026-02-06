@@ -5,6 +5,7 @@ import { pickPair } from "./pairs.js";
 import { renderApp } from "./render.js";
 import { searchOpenLibrary } from "./catalog/openlibrary.js";
 import { mapSubjectsToTypeSuggested } from "./catalog/type_mapping.js";
+import { parseImportFileText, normalizeTitleAuthorKeyForDedupe } from "./import/import_file.js";
 
 function byId(arr) {
   const m = new Map();
@@ -67,15 +68,21 @@ export async function startApp() {
 	    finishPromptToken: null,
 
     searchEnabled,
-    searchLangMode: "prefer_en", // prefer_en | any
+    searchLanguage: "en", // en | es | fr | de | it | pt | ja | ko | zh | any
     searchQuery: "",
     searchStatus: "idle", // idle | loading | done | error
     searchResults: [],
     searchError: null,
     searchRequestId: 0,
 
-    comparePending: null, // { action: "win"|"skip"|"undo", winner: "a"|"b"|null, at: number }
-    compareEnterAt: 0
+	    comparePending: null, // { action: "win"|"skip"|"undo", winner: "a"|"b"|null, at: number }
+    compareEnterAt: 0,
+
+	    importFlow: null, // { kind, provider, fileName, ... }
+    postImportMicCheckPrompt: null, // { at: number }
+
+    detailOpenLibraryStatus: "idle", // idle | loading | preview
+    detailOpenLibraryCandidate: null // normalized OL result
   };
 
   function setToast(msg, { hint = null, ms = 2500 } = {}) {
@@ -213,7 +220,11 @@ export async function startApp() {
 
   function setSurface(surface) {
     state.surface = surface;
-    if (surface !== "detail") state.detailItemId = null;
+    if (surface !== "detail") {
+      state.detailItemId = null;
+      state.detailOpenLibraryStatus = "idle";
+      state.detailOpenLibraryCandidate = null;
+    }
     if (surface !== "compare") {
       state.session = null;
       state.currentPair = null;
@@ -307,6 +318,19 @@ export async function startApp() {
     return entry;
   }
 
+  async function handlePatchItem(itemId, patch) {
+    if (typeof idb.patchItem !== "function") {
+      throw new Error("App is out of date. Hard refresh and try again.");
+    }
+    const item = await idb.patchItem(itemId, patch);
+    state.itemsById.set(itemId, item);
+    const idx = state.items.findIndex((it) => it.id === itemId);
+    if (idx >= 0) state.items[idx] = item;
+    else state.items.push(item);
+    render();
+    return item;
+  }
+
   async function handleTypeUseSuggested() {
     const itemId = state.detailItemId;
     if (!itemId) return;
@@ -363,6 +387,99 @@ export async function startApp() {
     await handlePatchEntry(itemId, { tags: next });
   }
 
+  async function startOpenLibraryUpdate() {
+    const itemId = state.detailItemId;
+    if (!itemId) return;
+    const item = state.itemsById.get(itemId);
+    const entry = state.libraryByItemId.get(itemId);
+    if (!item || !entry || entry.archived_at) return;
+
+    if (state.detailOpenLibraryStatus === "loading") return;
+    state.detailOpenLibraryStatus = "loading";
+    state.detailOpenLibraryCandidate = null;
+    render();
+
+    try {
+      const q = [item.title, item.author].filter(Boolean).join(" ");
+      const language = state.searchLanguage || "en";
+      let results = [];
+      if (language && language !== "any" && language !== "en") {
+        results = await searchOpenLibrary(q, { limit: 5, language, requireLanguage: true, resolveEditions: true });
+        if (!results.length) results = await searchOpenLibrary(q, { limit: 5, language, requireLanguage: false, resolveEditions: true });
+      } else if (language && language !== "any") {
+        results = await searchOpenLibrary(q, { limit: 5, language, requireLanguage: false, resolveEditions: false });
+      } else {
+        results = await searchOpenLibrary(q, { limit: 5, language: "any", requireLanguage: false, resolveEditions: false });
+      }
+      if (!results.length && language && language !== "any") {
+        results = await searchOpenLibrary(q, { limit: 5, language: "any", requireLanguage: false, resolveEditions: false });
+      }
+      const best = results[0] ?? null;
+      if (!best) {
+        state.detailOpenLibraryStatus = "idle";
+        render();
+        setToast("No Open Library match found.", { hint: "Try editing title/author, then retry." });
+        return;
+      }
+      state.detailOpenLibraryStatus = "preview";
+      state.detailOpenLibraryCandidate = best;
+      render();
+    } catch (e) {
+      state.detailOpenLibraryStatus = "idle";
+      render();
+      setToast("Open Library update failed.", { hint: String(e?.message || e) });
+    }
+  }
+
+  function cancelOpenLibraryUpdate() {
+    state.detailOpenLibraryStatus = "idle";
+    state.detailOpenLibraryCandidate = null;
+    render();
+  }
+
+  async function applyOpenLibraryUpdate() {
+    const itemId = state.detailItemId;
+    if (!itemId) return;
+    const item = state.itemsById.get(itemId);
+    const entry = state.libraryByItemId.get(itemId);
+    const cand = state.detailOpenLibraryCandidate;
+    if (!item || !entry || !cand) return;
+
+    const patch = {};
+    if (cand.title && String(cand.title).trim() && String(cand.title).trim() !== String(item.title || "").trim()) {
+      patch.title = String(cand.title).trim();
+    }
+    if ((!item.author || !String(item.author).trim()) && cand.author && String(cand.author).trim()) {
+      patch.author = String(cand.author).trim();
+    }
+    if (!item.cover_url && cand.cover_url) patch.cover_url = cand.cover_url;
+    if (!item.first_publish_year && cand.first_publish_year != null) patch.first_publish_year = cand.first_publish_year;
+    if (!item.isbn && cand.isbn) patch.isbn = cand.isbn;
+    if ((!Array.isArray(item.raw_subjects) || item.raw_subjects.length === 0) && Array.isArray(cand.raw_subjects)) {
+      patch.raw_subjects = cand.raw_subjects;
+    }
+    patch.openlibrary = { key: cand?.source?.key ?? null, updated_at: nowIso() };
+
+    await handlePatchItem(itemId, patch);
+
+    // Optional suggested type fill (never affects scoring).
+    if (
+      Array.isArray(cand.raw_subjects) &&
+      cand.raw_subjects.length &&
+      entry.type_decision == null &&
+      !entry.type_confirmed &&
+      !entry.type_suggested
+    ) {
+      const suggested = mapSubjectsToTypeSuggested(cand.raw_subjects);
+      if (suggested) await handlePatchEntry(itemId, { type_suggested: suggested });
+    }
+
+    state.detailOpenLibraryStatus = "idle";
+    state.detailOpenLibraryCandidate = null;
+    render();
+    setToast("Metadata updated.", { hint: "Saved from Open Library (does not affect ranking)." });
+  }
+
 		  async function handleAddItem(form, submitter = null) {
 	    const fd = new FormData(form);
 	    const title = String(fd.get("title") || "").trim();
@@ -394,8 +511,9 @@ export async function startApp() {
 
     const fd = new FormData(form);
     const q = String(fd.get("q") || "").trim();
-    const langMode = String(fd.get("lang_mode") || "prefer_en");
-    state.searchLangMode = langMode === "any" ? "any" : "prefer_en";
+    const lang = String(fd.get("lang") || "en").trim().toLowerCase();
+    const allowed = new Set(["en", "es", "fr", "de", "it", "pt", "ja", "ko", "zh", "any"]);
+    state.searchLanguage = allowed.has(lang) ? lang : "en";
     state.searchQuery = q;
 
     if (!q) {
@@ -412,7 +530,23 @@ export async function startApp() {
 
 	    const reqId = ++state.searchRequestId;
 	    try {
-	      const results = await searchOpenLibrary(q, { limit: 10, langMode: state.searchLangMode });
+	      const language = state.searchLanguage || "en";
+
+	      let results = [];
+	      if (language && language !== "any" && language !== "en") {
+	        results = await searchOpenLibrary(q, { limit: 10, language, requireLanguage: true, resolveEditions: true });
+	        if (!results.length) {
+	          results = await searchOpenLibrary(q, { limit: 10, language, requireLanguage: false, resolveEditions: true });
+	        }
+	      } else if (language && language !== "any") {
+	        results = await searchOpenLibrary(q, { limit: 10, language, requireLanguage: false, resolveEditions: false });
+	      } else {
+	        results = await searchOpenLibrary(q, { limit: 10, language: "any", requireLanguage: false, resolveEditions: false });
+	      }
+
+	      if (!results.length && language && language !== "any") {
+	        results = await searchOpenLibrary(q, { limit: 10, language: "any", requireLanguage: false, resolveEditions: false });
+	      }
 	      if (reqId !== state.searchRequestId) return; // stale response
 	      state.searchResults = results.map((r) => ({
 	        ...r,
@@ -641,12 +775,203 @@ export async function startApp() {
 
   async function handleImport(file) {
     const text = await file.text();
-    const obj = JSON.parse(text);
-    if (!obj?.data) throw new Error("Invalid export: missing data");
-    if (!confirm("Replace local data with this import?")) return;
-    await idb.importExportBlob(obj);
-    await load();
-    setToast("Import complete.", { hint: "Ratings are relative to your library." });
+    const parsed = parseImportFileText({ text, fileName: file?.name ?? "" });
+
+    if (parsed.kind === "checkcheck_json") {
+      state.importFlow = { kind: "checkcheck_json", fileName: parsed.fileName, exportObj: parsed.exportObj };
+      render();
+      return;
+    }
+
+    if (parsed.kind === "csv_export") {
+      state.importFlow = {
+        kind: "csv_export",
+        provider: parsed.provider,
+        fileName: parsed.fileName,
+        books: parsed.books
+      };
+      render();
+      return;
+    }
+
+    throw new Error(parsed?.error || "Unsupported import file.");
+  }
+
+  function providerLabel(provider) {
+    if (provider === "goodreads") return "Goodreads";
+    if (provider === "storygraph") return "StoryGraph";
+    return "CSV export";
+  }
+
+  async function bulkAddCompat({ items = [], libraryEntries = [] } = {}) {
+    if (typeof idb.bulkAddItemsAndEntries === "function") {
+      await idb.bulkAddItemsAndEntries({ items, libraryEntries });
+      return;
+    }
+
+    // Back-compat: older clients may have cached an idb module without bulkAddItemsAndEntries.
+    // Use the same DB/stores by name, in a single transaction.
+    const db = await new Promise((resolve, reject) => {
+      const req = indexedDB.open("checkcheck");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+
+    try {
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(["items", "library_entries"], "readwrite");
+        const itemsStore = tx.objectStore("items");
+        const entriesStore = tx.objectStore("library_entries");
+        for (const it of Array.isArray(items) ? items : []) itemsStore.put(it);
+        for (const e of Array.isArray(libraryEntries) ? libraryEntries : []) entriesStore.put(e);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    } finally {
+      db.close();
+    }
+  }
+
+  function buildExistingIndexes() {
+    const bySource = new Map(); // `${provider}|||${key}` -> item_id
+    const byTitleAuthor = new Map(); // normalized -> item_id
+    for (const it of state.items) {
+      const p = it?.source?.provider;
+      const k = it?.source?.key;
+      if (p && k) bySource.set(`${String(p)}|||${String(k)}`, it.id);
+      const norm = normalizeTitleAuthorKeyForDedupe({ title: it?.title ?? "", author: it?.author ?? "" });
+      if (norm) byTitleAuthor.set(norm, it.id);
+    }
+    return { bySource, byTitleAuthor };
+  }
+
+  async function applyCsvImport(flow) {
+    const provider = flow?.provider;
+    const books = Array.isArray(flow?.books) ? flow.books : [];
+    if (!provider || books.length === 0) return { added: 0, legacyUpdated: 0, skipped: 0 };
+
+    const { bySource, byTitleAuthor } = buildExistingIndexes();
+
+    const now = nowIso();
+    const itemsToPut = [];
+    const entriesToPut = [];
+    const itemsToUpdateLegacyOnly = [];
+
+    let skipped = 0;
+    let legacyUpdated = 0;
+
+    for (const b of books) {
+      const title = String(b?.title ?? "").trim();
+      if (!title) continue;
+      const author = String(b?.author ?? "").trim();
+
+      const sourceProvider = b?.source?.provider ? String(b.source.provider) : provider;
+      const sourceKey = b?.source?.key != null && String(b.source.key).trim() ? String(b.source.key).trim() : null;
+      const sourceId = sourceKey ? `${sourceProvider}|||${sourceKey}` : null;
+      const norm = normalizeTitleAuthorKeyForDedupe({ title, author });
+
+      const existingId = sourceId ? bySource.get(sourceId) : byTitleAuthor.get(norm);
+
+      if (existingId) {
+        skipped += 1;
+        const existingItem = state.itemsById.get(existingId);
+        const nextLegacy = {
+          ...(existingItem?.legacy ?? {}),
+          [provider]: existingItem?.legacy?.[provider] ?? {
+            rating: b?.legacy?.rating ?? null,
+            review: b?.legacy?.review ?? null,
+            imported_at: now
+          }
+        };
+        const didAddLegacy = existingItem?.legacy?.[provider] == null && (b?.legacy?.rating != null || b?.legacy?.review);
+        if (didAddLegacy) {
+          legacyUpdated += 1;
+          itemsToUpdateLegacyOnly.push({ ...(existingItem ?? {}), legacy: nextLegacy });
+        }
+        continue;
+      }
+
+      const item = {
+        id: crypto.randomUUID(),
+        title,
+        author,
+        source: { provider: sourceProvider, key: sourceKey },
+        isbn: b?.isbn ?? null,
+        cover_url: null,
+        first_publish_year: null,
+        raw_subjects: [],
+        legacy:
+          b?.legacy?.rating != null || b?.legacy?.review
+            ? {
+                [provider]: {
+                  rating: b?.legacy?.rating ?? null,
+                  review: b?.legacy?.review ?? null,
+                  imported_at: now
+                }
+              }
+            : {},
+        created_at: now
+      };
+
+      const status = b?.status === "finished" || b?.status === "reading" || b?.status === "want" ? b.status : "want";
+      const entry = {
+        item_id: item.id,
+        status,
+        finished_at: status === "finished" ? (b?.finished_at ?? now) : null,
+        type_suggested: null,
+        type_confirmed: null,
+        type_decision: null,
+        tags: [],
+        archived_at: null,
+        created_at: now,
+        updated_at: now
+      };
+
+      itemsToPut.push(item);
+      entriesToPut.push(entry);
+      if (sourceId) bySource.set(sourceId, item.id);
+      if (norm) byTitleAuthor.set(norm, item.id);
+    }
+
+    await bulkAddCompat({ items: [...itemsToPut, ...itemsToUpdateLegacyOnly], libraryEntries: entriesToPut });
+
+    return { added: itemsToPut.length, legacyUpdated, skipped };
+  }
+
+  async function applyImportFlow() {
+    const flow = state.importFlow;
+    if (!flow) return;
+
+    if (flow.kind === "checkcheck_json") {
+      if (!confirm("Replace local data with this import?")) return;
+      await idb.importExportBlob(flow.exportObj);
+      state.importFlow = null;
+      await load();
+      setToast("Import complete.", { hint: "Ratings are relative to your library." });
+      return;
+    }
+
+    if (flow.kind === "csv_export") {
+      const res = await applyCsvImport(flow);
+      state.importFlow = null;
+      await load();
+
+      setSurface("library");
+      state.libraryView = state.finishedIds.length ? "unplaced" : "want";
+
+      const hint =
+        res.skipped > 0
+          ? `Added ${res.added}. Skipped ${res.skipped} already in your library.`
+          : `Added ${res.added}.`;
+      setToast(`${providerLabel(flow.provider)} import complete.`, { hint });
+
+      if (state.finishedIds.length >= 5 && state.decidedComparisonsCount === 0) {
+        state.postImportMicCheckPrompt = { at: Date.now() };
+      }
+      render();
+      return;
+    }
   }
 
   async function handleResetDerived() {
@@ -692,6 +1017,12 @@ export async function startApp() {
     if (action === "type:select") {
       handleTypeSelect(el.value).catch((e) => alert(String(e)));
     }
+    if (action === "lang:set") {
+      const v = String(el.value || "").trim().toLowerCase();
+      const allowed = new Set(["en", "es", "fr", "de", "it", "pt", "ja", "ko", "zh", "any"]);
+      state.searchLanguage = allowed.has(v) ? v : "en";
+      render();
+    }
   });
 
 	  root.addEventListener("click", (ev) => {
@@ -715,12 +1046,32 @@ export async function startApp() {
 	    if (action === "import:open") {
 	      const input = document.createElement("input");
 	      input.type = "file";
-	      input.accept = "application/json";
+	      input.accept = ".json,.csv,application/json,text/csv";
       input.onchange = () => {
         const file = input.files?.[0];
         if (file) handleImport(file).catch((e) => alert(String(e)));
       };
       input.click();
+      return;
+    }
+
+    if (action === "import:cancel") {
+      state.importFlow = null;
+      render();
+      return;
+    }
+
+    if (action === "import:apply") return void applyImportFlow().catch((e) => alert(String(e)));
+
+    if (action === "postimport:miccheck") {
+      state.postImportMicCheckPrompt = null;
+      render();
+      return startSession({ stepsTotal: 10, mode: "mic_check" });
+    }
+
+    if (action === "postimport:later") {
+      state.postImportMicCheckPrompt = null;
+      render();
       return;
     }
 
@@ -789,6 +1140,8 @@ export async function startApp() {
       const itemId = el.getAttribute("data-item-id");
       if (!itemId) return;
       state.detailItemId = itemId;
+      state.detailOpenLibraryStatus = "idle";
+      state.detailOpenLibraryCandidate = null;
       state.surface = "detail";
       return render();
     }
@@ -805,6 +1158,10 @@ export async function startApp() {
       if (!itemId) return;
       return void handleRestore(itemId).catch((e) => alert(String(e)));
     }
+
+    if (action === "meta:update_openlibrary") return void startOpenLibraryUpdate();
+    if (action === "meta:cancel_openlibrary") return void cancelOpenLibraryUpdate();
+    if (action === "meta:apply_openlibrary") return void applyOpenLibraryUpdate().catch((e) => alert(String(e)));
 
     if (action === "finishprompt:dismiss") {
       state.finishPromptItemId = null;
