@@ -99,6 +99,22 @@ function renderToast(toast) {
 
 function renderTabBar(state) {
   const tab = String(state.libraryTab || "want");
+  function iconSvg(key) {
+    const base = 'class="tabIcon" viewBox="0 0 24 24" aria-hidden="true"';
+    if (key === "add") {
+      return `<svg ${base}><path d="M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3z"></path><path d="M12 8v8"></path><path d="M8 12h8"></path></svg>`;
+    }
+    if (key === "want") {
+      return `<svg ${base}><path d="M7 4h10a2 2 0 0 1 2 2v16l-7-4-7 4V6a2 2 0 0 1 2-2z"></path></svg>`;
+    }
+    if (key === "ranking") {
+      return `<svg ${base}><path d="M4 19h16"></path><path d="M7 19V11"></path><path d="M12 19V7"></path><path d="M17 19V14"></path></svg>`;
+    }
+    if (key === "discover") {
+      return `<svg ${base}><path d="M12 3l1.7 4.9L19 10l-5.3 2.1L12 17l-1.7-4.9L5 10l5.3-2.1L12 3z"></path></svg>`;
+    }
+    return "";
+  }
   const items = [
     { key: "add", label: "Add book" },
     { key: "want", label: "Want to read" },
@@ -111,7 +127,7 @@ function renderTabBar(state) {
       const current = it.key === tab ? ' aria-current="page"' : "";
       return `<button class="tabBtn" type="button" data-action="tab:select" data-tab="${escapeHtml(
         it.key
-      )}"${current}><div class="tabLabel">${escapeHtml(it.label)}</div></button>`;
+      )}"${current}>${iconSvg(it.key)}<div class="tabLabel">${escapeHtml(it.label)}</div></button>`;
     })
     .join("");
 
@@ -298,6 +314,31 @@ function renderLibrary(state) {
     return row.entry.status === "want" || row.entry.status === "reading";
   });
 
+  const viewsDesktop = `
+    <div class="row libraryViewsDesktop" style="justify-content:flex-start; gap:8px; margin-bottom:12px;">
+      <button class="pill" data-action="library:view" data-view="want"${state.libraryView === "want" ? ' aria-current="page"' : ""}>Want to read</button>
+      <button class="pill" data-action="library:view" data-view="unplaced"${
+        state.libraryView === "unplaced" ? ' aria-current="page"' : ""
+      }>Unplaced${unplacedIds.length ? ` (${unplacedIds.length})` : ""}</button>
+      <button class="pill" data-action="library:view" data-view="finished"${
+        state.libraryView === "finished" ? ' aria-current="page"' : ""
+      }>Finished</button>
+    </div>
+  `;
+  const viewsMobile =
+    libraryTab === "ranking"
+      ? `
+        <div class="row libraryViewsMobile" style="justify-content:flex-start; gap:8px; margin-bottom:12px;">
+          <button class="pill" data-action="library:view" data-view="finished"${
+            state.libraryView === "finished" ? ' aria-current="page"' : ""
+          }>Ranked</button>
+          <button class="pill" data-action="library:view" data-view="unplaced"${
+            state.libraryView === "unplaced" ? ' aria-current="page"' : ""
+          }>Unplaced${unplacedIds.length ? ` (${unplacedIds.length})` : ""}</button>
+        </div>
+      `
+      : "";
+
 	  const listItems = listRows
 		    .map((row) => {
 		      const { item, entry, derived, rank } = row;
@@ -428,17 +469,8 @@ function renderLibrary(state) {
 				              : ""
 				          }
 				          </div>
-				          <div class="row" style="justify-content:flex-start; gap:8px; margin-bottom:12px;">
-				            <button class="pill" data-action="library:view" data-view="want"${
-				              state.libraryView === "want" ? ' aria-current="page"' : ""
-				            }>Want to read</button>
-				            <button class="pill" data-action="library:view" data-view="unplaced"${
-				              state.libraryView === "unplaced" ? ' aria-current="page"' : ""
-				            }>Unplaced${unplacedIds.length ? ` (${unplacedIds.length})` : ""}</button>
-				            <button class="pill" data-action="library:view" data-view="finished"${
-				              state.libraryView === "finished" ? ' aria-current="page"' : ""
-				            }>Finished</button>
-				          </div>
+                  ${viewsDesktop}
+                  ${viewsMobile}
 				          ${onboardingBanner}
 				          ${unplacedHeader}
 				          ${

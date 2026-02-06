@@ -107,7 +107,9 @@ export async function startApp() {
     }
     if (finishedCount > 0) {
       state.libraryTab = "ranking";
-      if ((state.unplacedIds?.length ?? 0) > 0) state.libraryView = "unplaced";
+      const rankedCount = state.finishedIds.filter((id) => state.derivedById.get(id)?.stars_display != null).length;
+      if (rankedCount > 0) state.libraryView = "finished";
+      else if ((state.unplacedIds?.length ?? 0) > 0) state.libraryView = "unplaced";
       else state.libraryView = "finished";
       return;
     }
@@ -115,15 +117,22 @@ export async function startApp() {
     state.libraryView = "want";
   }
 
-  function setLibraryTab(tab, { touched = true, renderNow = true } = {}) {
+  function setLibraryTab(tab, { touched = true, renderNow = true, preserveView = false } = {}) {
     if (tab !== "add" && tab !== "want" && tab !== "ranking" && tab !== "discover") return;
+    const prevTab = state.libraryTab;
     state.libraryTab = tab;
     if (touched) state.libraryTabTouched = true;
 
-    if (tab === "want") state.libraryView = "want";
-    if (tab === "ranking") {
-      if (state.libraryView !== "unplaced" && state.libraryView !== "finished") {
-        state.libraryView = (state.unplacedIds?.length ?? 0) > 0 ? "unplaced" : "finished";
+    if (!preserveView) {
+      if (tab === "want") state.libraryView = "want";
+      if (tab === "ranking") {
+        const rankedCount = state.finishedIds.filter((id) => state.derivedById.get(id)?.stars_display != null).length;
+        const shouldPickDefault =
+          prevTab !== "ranking" || (state.libraryView !== "unplaced" && state.libraryView !== "finished");
+        if (shouldPickDefault) {
+          if (rankedCount > 0) state.libraryView = "finished";
+          else state.libraryView = (state.unplacedIds?.length ?? 0) > 0 ? "unplaced" : "finished";
+        }
       }
     }
 
@@ -1026,11 +1035,11 @@ export async function startApp() {
 		    const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
 		    if (entry.status === "finished" && !entry.archived_at && decidedComparisonsCount > 0) {
 		      state.libraryView = "unplaced";
-		      setLibraryTab("ranking", { renderNow: false });
+		      setLibraryTab("ranking", { renderNow: false, preserveView: true });
 		    }
 		    if (entry.status === "want" || entry.status === "reading") {
 		      state.libraryView = "want";
-		      setLibraryTab("want", { renderNow: false });
+		      setLibraryTab("want", { renderNow: false, preserveView: true });
 		    }
 
 		    // When the user marks an item finished, show a temporary inline prompt to do 3 comparisons.
@@ -1486,8 +1495,8 @@ export async function startApp() {
 			      const view = el.getAttribute("data-view");
 			      if (view !== "want" && view !== "unplaced" && view !== "finished") return;
 			      state.libraryView = view;
-			      if (view === "want") setLibraryTab("want", { touched: true, renderNow: false });
-			      else setLibraryTab("ranking", { touched: true, renderNow: false });
+			      if (view === "want") setLibraryTab("want", { touched: true, renderNow: false, preserveView: true });
+			      else setLibraryTab("ranking", { touched: true, renderNow: false, preserveView: true });
 			      render();
 			      return;
 			    }

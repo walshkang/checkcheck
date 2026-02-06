@@ -74,7 +74,10 @@ export async function setRowFinished(page, title, finished) {
 export async function setLibraryView(page, view) {
   if (view !== "want" && view !== "unplaced" && view !== "finished") throw new Error(`Invalid library view: ${view}`);
   await page.locator('[data-action="nav:library"]').click();
-  const btn = page.locator(`[data-action="library:view"][data-view="${view}"]`);
+  const desktopBtn = page.locator(".libraryViewsDesktop").locator(`[data-action="library:view"][data-view="${view}"]`);
+  const mobileBtn = page.locator(".libraryViewsMobile").locator(`[data-action="library:view"][data-view="${view}"]`);
+
+  const btn = (await desktopBtn.isVisible()) ? desktopBtn : mobileBtn;
   await expect(btn).toBeVisible();
   await btn.click();
   await expect(btn).toHaveAttribute("aria-current", "page");
