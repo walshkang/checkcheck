@@ -80,8 +80,37 @@ export async function loadAll() {
 function normalizeItem(it) {
   const rawSubjects = Array.isArray(it?.raw_subjects) ? it.raw_subjects : [];
   const legacy = it?.legacy && typeof it.legacy === "object" ? it.legacy : {};
-  const openlibrary = it?.openlibrary && typeof it.openlibrary === "object" ? it.openlibrary : null;
-  return { ...it, raw_subjects: rawSubjects, legacy, openlibrary };
+  const openlibraryRaw = it?.openlibrary && typeof it.openlibrary === "object" ? it.openlibrary : null;
+  const workKey =
+    typeof openlibraryRaw?.work_key === "string"
+      ? openlibraryRaw.work_key
+      : typeof openlibraryRaw?.key === "string" && String(openlibraryRaw.key).startsWith("/works/")
+        ? openlibraryRaw.key
+        : null;
+  const editionKey =
+    typeof openlibraryRaw?.edition_key === "string"
+      ? openlibraryRaw.edition_key
+      : typeof openlibraryRaw?.key === "string" && String(openlibraryRaw.key).startsWith("/books/")
+        ? openlibraryRaw.key
+        : null;
+  const openlibrary = openlibraryRaw
+    ? {
+        ...openlibraryRaw,
+        work_key: workKey,
+        edition_key: editionKey
+      }
+    : null;
+
+  const publisher = typeof it?.publisher === "string" ? it.publisher.trim() : "";
+  const language = typeof it?.language === "string" ? it.language.trim() : "";
+  return {
+    ...it,
+    raw_subjects: rawSubjects,
+    legacy,
+    openlibrary,
+    publisher: publisher ? publisher : null,
+    language: language ? language : null
+  };
 }
 
 function normalizeLibraryEntry(e) {
@@ -119,6 +148,8 @@ export async function addItem({
   isbn = null,
   cover_url = null,
   first_publish_year = null,
+  publisher = null,
+  language = null,
   raw_subjects = null,
   type_suggested = null
 }) {
@@ -128,6 +159,8 @@ export async function addItem({
     isbn: isbn ?? null,
     cover_url: cover_url ?? null,
     first_publish_year: first_publish_year ?? null,
+    publisher: publisher ?? null,
+    language: language ?? null,
     raw_subjects: Array.isArray(raw_subjects) ? raw_subjects : []
   };
   const item = {

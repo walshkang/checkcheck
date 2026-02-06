@@ -43,7 +43,14 @@ Last updated: 2026-02-04
 - `isbn: string|null`
 - `cover_url: string|null`
 - `first_publish_year: number|null`
+- `publisher: string|null` (best-effort; edition hint only)
+- `language: string|null` (best-effort; e.g. "eng")
 - `raw_subjects: string[]` (preserved for Phase 1 type suggestion; never surfaced directly)
+- `openlibrary: { work_key: string|null, edition_key: string|null, updated_at: string|null }` (provenance only; never affects scoring)
+
+### Identity note (Phase 1)
+- **One item per work** (the user’s “book” is the work they read).
+- Edition/translation is treated as **context metadata** (shown only in Detail + Search results; never affects scoring).
 
 ## Want enrichment (Phase 1)
 Search-derived metadata may optionally power a **suggested type** (non-authoritative) and user tags.
@@ -53,10 +60,17 @@ Search-derived metadata may optionally power a **suggested type** (non-authorita
 - See `docs/WANT_METADATA_PHASE1.md` for mapping rules, copy guardrails, and cover surface rules.
 
 ## Dedupe Policy (Soft, MVP)
-- Prefer Open Library identity when present:
-- If `source.provider === "openlibrary"` and `source.key` matches an existing item, do not add a duplicate; show a toast “Already in your library.”
-- Fallback heuristic (only if no `source.key`): normalized `title|author` check.
-- Never merge or rewrite existing items automatically.
+Goal: prevent duplicates while still letting users correct edition/translation metadata.
+
+- **Work match (block add):**
+  - If the search result matches an existing work (Open Library `work_key`, or a normalized `title|author` fallback), do **not** add a second item.
+  - Instead, search results should offer:
+    - **Open** (go to Detail)
+    - **Update edition** (preview → apply edition metadata to the existing item)
+- **Exact duplicate (block):**
+  - If `openlibrary.edition_key` is already applied, or ISBN matches, treat as already applied and no-op (toast OK).
+
+Never merge or rewrite items automatically without explicit user action (“Update edition”).
 
 ## Open Library Adapter
 - Implement as a small client module (no framework dependencies).
@@ -82,6 +96,7 @@ Search-derived metadata may optionally power a **suggested type** (non-authorita
 - With search enabled (default), user can:
 - Search Open Library and see results.
 - Add a result and see it in the library immediately.
+- If a result matches an existing work, user can update edition metadata via a preview-and-apply flow (no duplicates).
 - Refresh: item persists (IndexedDB).
 - Export/import round-trip preserves optional item fields (`source`, `isbn`, `cover_url`, `first_publish_year`).
 - With `?search=0`:

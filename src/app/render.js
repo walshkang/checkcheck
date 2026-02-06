@@ -424,6 +424,46 @@ function renderLibrary(state) {
   const status = state.searchStatus || "idle";
   const langMode = typeof state.searchLanguage === "string" ? state.searchLanguage : "en";
 
+  function normalizeKey(title, author) {
+    return `${String(title || "").trim().toLowerCase()}|${String(author || "").trim().toLowerCase()}`;
+  }
+
+  function findExistingItemIdForResult(r) {
+    const workKey = r?.source?.provider === "openlibrary" ? r?.source?.key : null;
+    if (workKey) {
+      const it = state.items?.find(
+        (x) =>
+          (x?.source?.provider === "openlibrary" && x?.source?.key === workKey) ||
+          (x?.openlibrary?.work_key && x.openlibrary.work_key === workKey)
+      );
+      if (it?.id) return it.id;
+    }
+    const key = normalizeKey(r?.title, r?.author);
+    if (!key || key === "|") return null;
+    const it = state.items?.find((x) => normalizeKey(x?.title, x?.author) === key);
+    return it?.id ?? null;
+  }
+
+  function languageLabel(code3) {
+    const c = String(code3 || "").trim().toLowerCase();
+    return (
+      {
+        eng: "English",
+        spa: "Spanish",
+        fre: "French",
+        fra: "French",
+        ger: "German",
+        deu: "German",
+        ita: "Italian",
+        por: "Portuguese",
+        jpn: "Japanese",
+        kor: "Korean",
+        chi: "Chinese",
+        zho: "Chinese"
+      }[c] ?? (c ? c.toUpperCase() : "")
+    );
+  }
+
   const header =
     status === "loading"
       ? `<div class="muted">Searching…</div>`
@@ -438,20 +478,95 @@ function renderLibrary(state) {
 	      ? `<ul class="list" style="margin-top:10px;">
 	          ${state.searchResults
 		            .map((r, i) => {
-	              const title = escapeHtml(r.title || "");
-	              const author = escapeHtml(r.author || "");
+                const title = escapeHtml(r.title || "");
+                const author = escapeHtml(r.author || "");
+                const existingItemId = findExistingItemIdForResult(r);
+                const isExisting = !!existingItemId;
+                const existingEntry = isExisting ? state.libraryByItemId?.get(existingItemId) ?? null : null;
+                const canPromoteFinished =
+                  isExisting && (!!existingEntry?.archived_at || (existingEntry?.status && existingEntry.status !== "finished"));
 	              const suggested = r.type_suggested
 	                ? `<div class="sub">Suggested: ${escapeHtml(r.type_suggested)}</div>`
 	                : "";
-	              const year = r.first_publish_year
-	                ? ` · <span class="muted">${escapeHtml(r.first_publish_year)}</span>`
-	                : "";
+                const editionBits = [];
+                if (r.publisher) editionBits.push(escapeHtml(r.publisher));
+                if (r.first_publish_year) editionBits.push(escapeHtml(r.first_publish_year));
+                const langLabel = languageLabel(r.language);
+                if (langLabel) editionBits.push(escapeHtml(langLabel));
+                if (r.isbn) editionBits.push(`ISBN ${escapeHtml(String(r.isbn).slice(0, 13))}`);
+                const editionLine = editionBits.length ? `<div class="sub muted">${editionBits.join(" • ")}</div>` : "";
 	              const cover = r.cover_url
 	                ? `<img src="${escapeHtml(r.cover_url)}" alt="" width="32" height="48" style="border-radius:8px; border:1px solid var(--stroke);" loading="lazy" />`
 	                : `<div style="width:32px; height:48px; border-radius:8px; border:1px solid var(--stroke); background: rgba(255,255,255,0.4);"></div>`;
 
 	              const btnWant = `<button class="btn" type="button" data-action="search:add" data-target-status="want" data-result-idx="${i}">Want</button>`;
 	              const btnFinished = `<button class="btn" type="button" data-action="search:add" data-target-status="finished" data-result-idx="${i}">Finished</button>`;
+                const btnOpen = `<button class="btn" type="button" data-action="search:open_existing" data-item-id="${escapeHtml(
+                  existingItemId
+                )}">Open</button>`;
+                const btnPromoteFinished = `<button class="btn" type="button" data-action="search:add" data-target-status="finished" data-result-idx="${i}">Finished</button>`;
+                const btnUpdateEdition = `<button class="btn primary" type="button" data-action="search:update_edition" data-item-id="${escapeHtml(
+                  existingItemId
+                )}" data-result-idx="${i}">Update edition</button>`;
+
+                const preview = state.searchEditionPreview;
+                const isPreviewRow = preview && preview.resultIdx === i && preview.existingItemId === existingItemId;
+                let previewBlock = "";
+                if (isPreviewRow) {
+                  if (preview.status === "loading") {
+                    previewBlock = `
+                      <div class="inlinePrompt" data-kind="edition-preview" style="margin-top:10px;">
+                        <div class="muted">Finding best edition…</div>
+                        <div style="height:10px;"></div>
+                        <button class="btn" type="button" data-action="search:cancel_edition">Cancel</button>
+                      </div>
+                    `;
+                  } else if (preview.status === "error") {
+                    previewBlock = `
+                      <div class="inlinePrompt" data-kind="edition-preview" style="margin-top:10px;">
+                        <div class="muted">Couldn’t load editions.</div>
+                        ${
+                          preview.error
+                            ? `<div class="muted" style="margin-top:6px; font-size:12px;">${escapeHtml(preview.error)}</div>`
+                            : ""
+                        }
+                        <div style="height:10px;"></div>
+                        <button class="btn" type="button" data-action="search:cancel_edition">Close</button>
+                      </div>
+                    `;
+                  } else if (preview.status === "preview" && preview.candidate) {
+                    const c = preview.candidate;
+                    const bits = [];
+                    if (c.publisher) bits.push(escapeHtml(c.publisher));
+                    if (c.first_publish_year) bits.push(escapeHtml(c.first_publish_year));
+                    const l = Array.isArray(c.languages) && c.languages.length ? languageLabel(c.languages[0]) : "";
+                    if (l) bits.push(escapeHtml(l));
+                    if (c.isbn) bits.push(`ISBN ${escapeHtml(String(c.isbn).slice(0, 13))}`);
+                    const line = bits.length ? bits.join(" • ") : "Edition details";
+                    const img = c.cover_url
+                      ? `<img src="${escapeHtml(c.cover_url)}" alt="" width="32" height="48" style="border-radius:8px; border:1px solid var(--stroke);" loading="lazy" />`
+                      : `<div style="width:32px; height:48px; border-radius:8px; border:1px solid var(--stroke); background: rgba(255,255,255,0.4);"></div>`;
+                    const authorLine = author || `<span class="muted">Unknown author</span>`;
+                    previewBlock = `
+                      <div class="inlinePrompt" data-kind="edition-preview" style="margin-top:10px;">
+                        <div class="muted">Apply this edition to your existing book?</div>
+                        <div class="row" style="align-items:center; gap:10px; margin-top:8px;">
+                          ${img}
+                          <div class="stack" style="gap:2px; flex:1;">
+                            <div class="title">${title}</div>
+                            <div class="sub">${authorLine}</div>
+                            <div class="sub muted">${line}</div>
+                          </div>
+                        </div>
+                        <div class="row" style="justify-content:flex-start; gap:10px; margin-top:10px; flex-wrap:wrap;">
+                          <button class="btn primary" type="button" data-action="search:apply_edition">Apply</button>
+                          <button class="btn" type="button" data-action="search:cancel_edition">Cancel</button>
+                        </div>
+                        <div class="muted" style="margin-top:8px;">Does not affect checkcheck ranking.</div>
+                      </div>
+                    `;
+                  }
+                }
 
 	              return `
 	                <li class="search-item" data-kind="search-result">
@@ -459,14 +574,16 @@ function renderLibrary(state) {
 	                    ${cover}
 		                    <div class="stack" style="gap:2px; margin-left:10px; flex:1;">
 		                      <div class="title">${title}</div>
-		                      <div class="sub">${author || `<span class="muted">Unknown author</span>`}${year}</div>
+		                      <div class="sub">${author || `<span class="muted">Unknown author</span>`}</div>
+                          ${editionLine}
 		                      ${suggested}
 		                    </div>
 		                    <div class="row" style="gap:8px; justify-content:flex-end; flex-wrap:wrap;">
-		                      ${btnWant}
-		                      ${btnFinished}
+		                      ${isExisting ? (canPromoteFinished ? btnPromoteFinished : btnOpen) : btnWant}
+		                      ${isExisting ? btnUpdateEdition : btnFinished}
 		                    </div>
 		                  </div>
+                      ${previewBlock}
 		                </li>
 		              `;
 		            })
@@ -768,6 +885,36 @@ function renderDetail(state) {
       zh: "Chinese",
       any: "Any language"
     }[languageCode] ?? "English";
+
+  function languageLabel3(code3) {
+    const c = String(code3 || "").trim().toLowerCase();
+    return (
+      {
+        eng: "English",
+        spa: "Spanish",
+        fre: "French",
+        fra: "French",
+        ger: "German",
+        deu: "German",
+        ita: "Italian",
+        por: "Portuguese",
+        jpn: "Japanese",
+        kor: "Korean",
+        chi: "Chinese",
+        zho: "Chinese"
+      }[c] ?? (c ? c.toUpperCase() : "")
+    );
+  }
+
+  const editionBits = [];
+  if (item.publisher) editionBits.push(escapeHtml(item.publisher));
+  if (item.first_publish_year) editionBits.push(escapeHtml(item.first_publish_year));
+  const itemLang = languageLabel3(item.language);
+  if (itemLang) editionBits.push(escapeHtml(itemLang));
+  if (item.isbn) editionBits.push(`ISBN ${escapeHtml(String(item.isbn).slice(0, 13))}`);
+  const editionInfo = editionBits.length
+    ? `<div class="sub muted" style="margin-top:4px;">Edition: ${editionBits.join(" • ")}</div>`
+    : "";
   const metaBtnLabel =
     metaStatus === "loading" ? "Updating…" : metaStatus === "preview" ? "Update metadata (Open Library)" : "Update metadata (Open Library)";
   const metaBtnDisabled = !canUpdateMeta || metaStatus === "loading";
@@ -803,6 +950,7 @@ function renderDetail(state) {
     <div data-kind="detail-meta">
       <div class="title">Metadata</div>
       <div class="sub">Covers are for recognition only · Language: ${escapeHtml(languageLabel)}</div>
+      ${editionInfo}
       <div class="row" style="gap:8px; flex-wrap:wrap; margin-top:8px; align-items:center;">
         <select class="input" data-action="lang:set" style="min-width: 180px;">
           <option value="en" ${languageCode === "en" ? "selected" : ""}>English</option>

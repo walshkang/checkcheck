@@ -3,7 +3,7 @@ import { recomputeDerived } from "../rating/recompute.js";
 import * as idb from "../storage/idb.js";
 import { pickPair } from "./pairs.js";
 import { renderApp } from "./render.js";
-import { searchOpenLibrary } from "./catalog/openlibrary.js";
+import { resolveOpenLibraryEditionForWork, searchOpenLibrary } from "./catalog/openlibrary.js";
 import { mapSubjectsToTypeSuggested } from "./catalog/type_mapping.js";
 import { parseImportFileText, normalizeTitleAuthorKeyForDedupe } from "./import/import_file.js";
 
@@ -77,6 +77,7 @@ export async function startApp() {
     searchResults: [],
     searchError: null,
     searchRequestId: 0,
+    searchEditionPreview: null, // { resultIdx, existingItemId, status, candidate, error }
 
     comparePending: null, // { action: "win"|"skip"|"undo", winner: "a"|"b"|null, at: number }
     compareEnterAt: 0,
@@ -467,7 +468,8 @@ export async function startApp() {
     if (!item || !entry || !cand) return;
 
     const patch = {};
-    if (cand.title && String(cand.title).trim() && String(cand.title).trim() !== String(item.title || "").trim()) {
+    // Work identity: keep the user’s canonical title stable; only fill missing fields.
+    if ((!item.title || !String(item.title).trim()) && cand.title && String(cand.title).trim()) {
       patch.title = String(cand.title).trim();
     }
     if ((!item.author || !String(item.author).trim()) && cand.author && String(cand.author).trim()) {
@@ -476,10 +478,16 @@ export async function startApp() {
     if (!item.cover_url && cand.cover_url) patch.cover_url = cand.cover_url;
     if (!item.first_publish_year && cand.first_publish_year != null) patch.first_publish_year = cand.first_publish_year;
     if (!item.isbn && cand.isbn) patch.isbn = cand.isbn;
+    if (!item.publisher && cand.publisher) patch.publisher = cand.publisher;
+    if (!item.language && cand.language) patch.language = cand.language;
     if ((!Array.isArray(item.raw_subjects) || item.raw_subjects.length === 0) && Array.isArray(cand.raw_subjects)) {
       patch.raw_subjects = cand.raw_subjects;
     }
-    patch.openlibrary = { key: cand?.source?.key ?? null, updated_at: nowIso() };
+    patch.openlibrary = {
+      work_key: cand?.source?.key ?? null,
+      edition_key: cand?.edition?.key ?? null,
+      updated_at: nowIso()
+    };
 
     await handlePatchItem(itemId, patch);
 
@@ -536,6 +544,7 @@ export async function startApp() {
     const allowed = new Set(["en", "es", "fr", "de", "it", "pt", "ja", "ko", "zh", "any"]);
     state.searchLanguage = allowed.has(lang) ? lang : "en";
     state.searchQuery = q;
+    state.searchEditionPreview = null;
 
     if (!q) {
       state.searchStatus = "idle";
@@ -547,6 +556,7 @@ export async function startApp() {
 
     state.searchStatus = "loading";
     state.searchError = null;
+    state.searchEditionPreview = null;
     render();
 
 	    const reqId = ++state.searchRequestId;
@@ -652,6 +662,8 @@ export async function startApp() {
       isbn: r.isbn ?? null,
       cover_url: r.cover_url ?? null,
       first_publish_year: r.first_publish_year ?? null,
+      publisher: r.publisher ?? null,
+      language: r.language ?? null,
       raw_subjects: r.raw_subjects ?? [],
       type_suggested: mapSubjectsToTypeSuggested(r.raw_subjects)
     });
@@ -668,6 +680,128 @@ export async function startApp() {
 		      await handleSetStatus(item.id, "finished");
 		    }
 		  }
+
+  function cancelSearchEditionPreview() {
+    state.searchEditionPreview = null;
+  }
+
+  async function handleSearchOpenExisting(itemId) {
+    const id = String(itemId || "").trim();
+    if (!id) return;
+    state.detailItemId = id;
+    state.detailOpenLibraryStatus = "idle";
+    state.detailOpenLibraryCandidate = null;
+    setSurface("detail");
+    render();
+  }
+
+  async function handleSearchStartEditionPreview(resultIdx, existingItemId) {
+    const i = Number(resultIdx);
+    if (!Number.isFinite(i) || i < 0) return;
+    const r = state.searchResults[i];
+    if (!r) return;
+
+    const existingId = String(existingItemId || "").trim();
+    if (!existingId) return;
+
+    const workKey = r?.source?.provider === "openlibrary" ? r?.source?.key : null;
+    if (!workKey) {
+      setToast("Can’t update edition.", { hint: "No Open Library work key." });
+      return;
+    }
+
+    state.searchEditionPreview = {
+      resultIdx: i,
+      existingItemId: existingId,
+      status: "loading",
+      candidate: null,
+      error: null
+    };
+    render();
+
+    try {
+      const language = state.searchLanguage || "en";
+      const queryText = state.searchQuery || "";
+      const cand = await resolveOpenLibraryEditionForWork(workKey, { language, queryText });
+      if (!cand) {
+        cancelSearchEditionPreview();
+        render();
+        setToast("No edition match found.", { hint: "Try a more specific query." });
+        return;
+      }
+      if (!state.searchEditionPreview || state.searchEditionPreview.resultIdx !== i) return;
+      state.searchEditionPreview = {
+        ...state.searchEditionPreview,
+        status: "preview",
+        candidate: cand,
+        error: null
+      };
+      render();
+    } catch (e) {
+      if (!state.searchEditionPreview || state.searchEditionPreview.resultIdx !== i) return;
+      state.searchEditionPreview = {
+        ...state.searchEditionPreview,
+        status: "error",
+        candidate: null,
+        error: String(e?.message ?? e)
+      };
+      render();
+    }
+  }
+
+  async function handleSearchApplyEdition() {
+    const p = state.searchEditionPreview;
+    if (!p || p.status !== "preview" || !p.candidate) return;
+    const r = state.searchResults[p.resultIdx];
+    if (!r) return;
+
+    const itemId = p.existingItemId;
+    const item = state.itemsById.get(itemId);
+    if (!item) return;
+
+    const workKey = r?.source?.provider === "openlibrary" ? r?.source?.key : null;
+    const patch = {};
+
+    const alreadySameEdition =
+      (item?.openlibrary?.edition_key &&
+        p.candidate.edition_key &&
+        item.openlibrary.edition_key === p.candidate.edition_key) ||
+      (item?.openlibrary?.edition_key &&
+        item?.isbn &&
+        p.candidate.isbn &&
+        String(item.isbn) === String(p.candidate.isbn));
+    if (alreadySameEdition) {
+      cancelSearchEditionPreview();
+      render();
+      setToast("Edition already applied.", { hint: "Relative to your library." });
+      return;
+    }
+
+    // If the item was manual-first, attach its work identity for future dedupe.
+    if (workKey && (!item.source || !item.source.provider)) {
+      patch.source = { provider: "openlibrary", key: workKey };
+    }
+
+    // Explicit user action: apply edition metadata (overwrites).
+    if (p.candidate.cover_url) patch.cover_url = p.candidate.cover_url;
+    if (p.candidate.first_publish_year != null) patch.first_publish_year = p.candidate.first_publish_year;
+    if (p.candidate.isbn) patch.isbn = p.candidate.isbn;
+    if (p.candidate.publisher) patch.publisher = p.candidate.publisher;
+    const lang =
+      Array.isArray(p.candidate.languages) && p.candidate.languages.length ? p.candidate.languages[0] : null;
+    if (lang) patch.language = lang;
+
+    patch.openlibrary = {
+      work_key: workKey,
+      edition_key: p.candidate.edition_key ?? null,
+      updated_at: nowIso()
+    };
+
+    await handlePatchItem(itemId, patch);
+    cancelSearchEditionPreview();
+    render();
+    setToast("Edition updated.", { hint: "Does not affect ranking." });
+  }
 
 		  async function handleSetStatus(itemId, status) {
 	    const prev = state.libraryByItemId.get(itemId);
@@ -1298,12 +1432,34 @@ export async function startApp() {
 	      return void handleAddFromSearch(idx, targetStatus).catch((e) => alert(String(e)));
 	    }
 
+    if (action === "search:open_existing") {
+      const itemId = el.getAttribute("data-item-id");
+      return void handleSearchOpenExisting(itemId).catch((e) => alert(String(e)));
+    }
+
+    if (action === "search:update_edition") {
+      const idx = el.getAttribute("data-result-idx");
+      const itemId = el.getAttribute("data-item-id");
+      return void handleSearchStartEditionPreview(idx, itemId).catch((e) => alert(String(e)));
+    }
+
+    if (action === "search:cancel_edition") {
+      cancelSearchEditionPreview();
+      render();
+      return;
+    }
+
+    if (action === "search:apply_edition") {
+      return void handleSearchApplyEdition().catch((e) => alert(String(e)));
+    }
+
     if (action === "search:clear") {
       state.searchQuery = "";
       state.searchResults = [];
       state.searchStatus = "idle";
       state.searchError = null;
       state.searchRequestId++;
+      state.searchEditionPreview = null;
       render();
       return;
     }

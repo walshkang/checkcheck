@@ -69,6 +69,15 @@ function editionLanguages(edition) {
   return keys;
 }
 
+function toLangCode3(keyOrCode) {
+  const s = String(keyOrCode || "").trim();
+  if (!s) return null;
+  const parts = s.split("/");
+  const last = parts[parts.length - 1] || "";
+  const c = last.length === 3 ? last : s.length === 3 ? s : "";
+  return c ? c.toLowerCase() : null;
+}
+
 function editionMatchesLanguage(edition, code2) {
   const lang = String(code2 || "").trim().toLowerCase();
   if (!lang || lang === "any") return true;
@@ -93,6 +102,57 @@ function pickCoverIdFromEdition(edition) {
   const covers = Array.isArray(edition?.covers) ? edition.covers : [];
   const id = covers.length ? covers[0] : null;
   return id != null ? Number(id) : null;
+}
+
+function pickPublisherFromEdition(edition) {
+  const arr = Array.isArray(edition?.publishers) ? edition.publishers : [];
+  const v = arr.length ? String(arr[0] || "").trim() : "";
+  return v || null;
+}
+
+function pickPublishYearFromEdition(edition) {
+  const raw = String(edition?.publish_date ?? "").trim();
+  const m = raw.match(/(1[5-9]\d{2}|20\d{2})/);
+  return m ? Number(m[1]) : null;
+}
+
+function normalizePublisherFromDoc(d) {
+  const arr = Array.isArray(d?.publisher) ? d.publisher : typeof d?.publisher === "string" ? [d.publisher] : [];
+  const v = arr.length ? String(arr[0] || "").trim() : "";
+  return v || null;
+}
+
+function normalizeLanguageFromDoc(d) {
+  const arr = Array.isArray(d?.language) ? d.language : typeof d?.language === "string" ? [d.language] : [];
+  const v = arr.length ? String(arr[0] || "").trim() : "";
+  return v || null;
+}
+
+function normalizeQueryTokens(q) {
+  const s = String(q || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  if (!s) return [];
+  const tokens = s.split(/\s+/g).filter(Boolean);
+  // Keep tokens lightweight; we only need disambiguators like translator/publisher keywords.
+  const stop = new Set(["the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with"]);
+  return tokens.filter((t) => t.length >= 3 && !stop.has(t)).slice(0, 12);
+}
+
+function editionTextBlob(edition) {
+  const parts = [];
+  const push = (x) => {
+    const v = String(x || "").trim();
+    if (v) parts.push(v);
+  };
+  push(edition?.title);
+  push(edition?.subtitle);
+  push(edition?.by_statement);
+  for (const p of Array.isArray(edition?.publishers) ? edition.publishers : []) push(p);
+  push(edition?.publish_date);
+  for (const c of Array.isArray(edition?.contributions) ? edition.contributions : []) push(c);
+  return parts.join(" • ").toLowerCase();
 }
 
 async function fetchEditionsForWork(workKey, { limit = 50 } = {}) {
@@ -127,6 +187,46 @@ async function resolveEditionForWork(workKey, { language = "en" } = {}) {
   return best;
 }
 
+async function resolveEditionForWorkWithQuery(workKey, { language = "en", queryText = "" } = {}) {
+  const editions = await fetchEditionsForWork(workKey, { limit: 50 });
+  const lang = String(language || "en").trim().toLowerCase();
+  const tokens = normalizeQueryTokens(queryText);
+
+  const scored = editions
+    .map((e) => {
+      const hasCover = pickCoverIdFromEdition(e) != null;
+      const langMatch = editionMatchesLanguage(e, lang);
+      const blob = tokens.length ? editionTextBlob(e) : "";
+      let tokenHits = 0;
+      for (const t of tokens) if (blob.includes(t)) tokenHits += 1;
+      const score = (langMatch ? 100 : 0) + (hasCover ? 10 : 0) + tokenHits * 4;
+      return { e, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const best = scored.length ? scored[0].e : null;
+  if (!best) return null;
+  if (lang !== "any" && !editionMatchesLanguage(best, lang)) return null;
+  return best;
+}
+
+export async function resolveOpenLibraryEditionForWork(workKey, { language = "en", queryText = "" } = {}) {
+  const edition = await resolveEditionForWorkWithQuery(workKey, { language, queryText });
+  if (!edition) return null;
+  const isbn = pickIsbnFromEdition(edition);
+  const coverId = pickCoverIdFromEdition(edition);
+  const langs = editionLanguages(edition).map(toLangCode3).filter(Boolean);
+  return {
+    edition_key: edition?.key ? String(edition.key) : null,
+    isbn,
+    cover_i: coverId,
+    cover_url: coverId != null ? toCoverUrl({ cover_i: coverId, isbn }, "S") : toCoverUrl({ isbn }, "S"),
+    publisher: pickPublisherFromEdition(edition),
+    first_publish_year: pickPublishYearFromEdition(edition),
+    languages: langs
+  };
+}
+
 export async function searchOpenLibrary(
   q,
   { limit = 10, language = "en", requireLanguage = false, resolveEditions = false } = {}
@@ -151,6 +251,8 @@ export async function searchOpenLibrary(
       "title",
       "author_name",
       "first_publish_year",
+      "publisher",
+      "language",
       "isbn",
       "cover_i",
       "subject",
@@ -173,13 +275,15 @@ export async function searchOpenLibrary(
       author: Array.isArray(d.author_name) && d.author_name.length ? String(d.author_name[0]) : "",
       first_publish_year:
         typeof d.first_publish_year === "number" ? d.first_publish_year : d.first_publish_year ?? null,
+      publisher: normalizePublisherFromDoc(d),
+      language: normalizeLanguageFromDoc(d),
       isbn,
       cover_url: toCoverUrl({ cover_i: d.cover_i, isbn }),
       raw_subjects: normalizeRawSubjectsFromDoc(d)
     };
   });
 
-  const shouldResolve = resolveEditions && lang !== "any" && lang !== "en";
+  const shouldResolve = resolveEditions && lang !== "any";
   if (!shouldResolve) return results;
 
   const max = Math.min(results.length, 5);
@@ -188,22 +292,26 @@ export async function searchOpenLibrary(
       const workKey = r?.source?.key;
       if (!workKey) return r;
       try {
-        const edition = await resolveEditionForWork(workKey, { language: lang });
+        const edition = await resolveEditionForWorkWithQuery(workKey, { language: lang, queryText: queryBase });
         if (!edition) return r;
         const editionTitle = edition?.title ? String(edition.title) : "";
         const isbn = pickIsbnFromEdition(edition) || r.isbn;
         const coverId = pickCoverIdFromEdition(edition);
         const cover_url = coverId != null ? toCoverUrl({ cover_i: coverId, isbn }, "S") : r.cover_url || toCoverUrl({ isbn }, "S");
-        return {
+        const next = {
           ...r,
-          title: editionTitle || r.title,
           isbn,
           cover_url,
+          publisher: pickPublisherFromEdition(edition) || r.publisher || null,
+          language: r.language || (toLangCode3(editionLanguages(edition)[0]) ?? null),
           edition: {
             key: edition?.key ? String(edition.key) : null,
             languages: editionLanguages(edition)
           }
         };
+        // For non-English searches, edition titles often carry the translated title (useful for recognition).
+        if (lang !== "en" && lang !== "any" && editionTitle) next.title = editionTitle;
+        return next;
       } catch {
         return r;
       }
