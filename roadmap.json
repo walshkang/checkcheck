@@ -1,8 +1,8 @@
 {
   "project_name": "checkcheck",
-  "tagline": "Mic-check your taste: comparisons-first personal ratings for books (Phase 1), expandable to films + restaurants (Phase 2+).",
+  "tagline": "Mic-check your taste: comparisons-first personal ratings for books (Phase 1), expandable to films + restaurants (Phase 4+).",
   "version": "1.0.0-phase1-spec",
-  "last_updated": "2026-02-04",
+  "last_updated": "2026-02-06",
   "brand": {
     "working_name": "checkcheck",
     "pronunciation": "check-check",
@@ -49,6 +49,7 @@
       "docs/BOOK_SEARCH_MVP.md",
       "docs/WANT_METADATA_PHASE1.md",
       "docs/COMPARE_SLEEK_PHASE1.md",
+      "docs/COMPARE_FEEDBACK_PHASE1.md",
       "docs/SIGNAL_VISUAL_LANGUAGE.md"
     ]
   },
@@ -71,7 +72,7 @@
             "Import from Goodreads/StoryGraph (CSV) via unified Import entry; store legacy ratings/reviews for provenance but never use or show them in ranking UI.",
             "Optional: external search integration (later) behind a flag.",
             "Statuses: want / reading / finished; finished_at.",
-            "Library sub-views: Want to read (saved queue) vs Finished (rated history).",
+            "Library sub-views: Want to read (saved queue), Unplaced (finished but not yet rated), and Finished (rated history).",
             "Want enrichment (Phase 1): suggested type + user tags (context only; never affects scoring).",
             "Metadata ingestion (Phase 1): preserve Open Library raw subjects on items for future taxonomy expansion.",
             "De-dupe strategy documented (work vs edition)."
@@ -149,16 +150,169 @@
       ]
     },
     "phase_2": {
-      "name": "Cross-Domain + Similarity Models",
-      "goal": "Expand to films/restaurants and learn cross-domain taste overlaps; build 'people like you' and predictive recs.",
+      "name": "Mobile-first UX + Bottom Tabs (Books)",
+      "goal": "Make the app feel native on mobile: bottom tabs for the core Library flows (Add book, Want, Ranking, Discover stub). After the UX is squared away, tune Elo parameters using real traces.",
       "entry_criteria": [
         "Phase 1 loop validated (repeat usage + trust in scores).",
-        "Rating curve/hysteresis stabilized and versioned.",
-        "Sufficient data per user to form robust user vectors (or strong cold-start strategy)."
+        "Compare pending-lock + calm motion feel premium on mobile.",
+        "Ranking order is stable across refreshes (no jitter surprises)."
       ],
       "epics": [
         {
           "id": "P2-E1",
+          "name": "Bottom Tabs (Mobile-first Library Shell)",
+          "outcome": "Mobile navigation is one-handed and predictable, with four tabs: Add book, Want to read, My library ranking, Discover.",
+          "scope": [
+            "Show a bottom tab bar on mobile for: Add book, Want to read, My library ranking, Discover.",
+            "Treat tabs as Library sub-views (do not introduce a new primary surface).",
+            "Compare remains a focused surface; hide the tab bar during Compare.",
+            "Detail is presented as a focused surface; Back returns to the originating tab/task state.",
+            "Discover tab is a Phase 2 stub (copy + CTA), with real functionality in Phase 3."
+          ],
+          "acceptance_criteria": [
+            "On mobile, switching between Add/Wanted/Ranking is < 1s and preserves scroll state.",
+            "Compare still feels focused (no accidental tab switches mid-session).",
+            "Back behavior is consistent and never loses the in-progress Compare session state."
+          ]
+        },
+        {
+          "id": "P2-E2",
+          "name": "Add book (Tab) — Fast Ingestion",
+          "outcome": "Adding a book is the fastest, most obvious action in the app.",
+          "scope": [
+            "Search-first add with manual fallback.",
+            "Immediately choose status (want/reading/finished) with low-friction defaults.",
+            "After adding as finished, offer the obvious next step: Place / Mic check (depending on state)."
+          ],
+          "acceptance_criteria": [
+            "A new user can add 10 books in < 2 minutes on mobile.",
+            "The next action after adding is always clear (compare, place, or continue adding)."
+          ]
+        },
+        {
+          "id": "P2-E3",
+          "name": "Want to read (Tab) — Queue Control",
+          "outcome": "The want list feels like a lightweight reading queue, not a junk drawer.",
+          "scope": [
+            "Sort and quick actions (start reading, mark finished, remove).",
+            "Lightweight organization that stays user-owned (tags are OK; no algorithmic reordering)."
+          ],
+          "acceptance_criteria": [
+            "Users can move items through want→reading→finished in a few taps.",
+            "Want list remains fast at 200+ items."
+          ]
+        },
+        {
+          "id": "P2-E4",
+          "name": "My library ranking (Tab) — Browse + Place",
+          "outcome": "Finished rankings feel trustworthy and easy to browse; placement is always one tap away.",
+          "scope": [
+            "Ranking list view is the default 'Finished' browse experience.",
+            "Show quarter-stars (list) and stacked rating context on tap (detail).",
+            "Make Unplaced items obvious and easy to place (3 comparisons).",
+            "Keep 'Mic check' available as a fast calibration sprint."
+          ],
+          "acceptance_criteria": [
+            "Users can find their top 10 and bottom 10 quickly on mobile.",
+            "Unplaced items are hard to miss and easy to resolve."
+          ]
+        },
+        {
+          "id": "P2-E5",
+          "name": "Compare feedback polish (Post-Tab UX)",
+          "outcome": "Compare feels tactile and calm: immediate feedback, clear pending state, no noise.",
+          "scope": [
+            "Inline 'Saving…' progress state (thresholded) and honest save failure UX.",
+            "Haptics default ON with a distinct Undo pattern.",
+            "Discoverable in-Compare Feedback control (no new primary surface).",
+            "No routine success toasts in Compare."
+          ],
+          "acceptance_criteria": [
+            "Tap→visual feedback is immediate; tap→next-pair p90 remains strong.",
+            "Pending-lock blocks interleavings; blocked taps do not feel broken.",
+            "Haptics can be toggled off and stays off."
+          ]
+        },
+        {
+          "id": "P2-E6",
+          "name": "Elo tuning (After UX is squared away)",
+          "outcome": "Comparisons produce rankings that feel stable and intuitive across library sizes.",
+          "scope": [
+            "Tune Elo parameters (K, initialization, any scaling) using real exported traces.",
+            "Define a repeatable tuning harness and acceptance thresholds (speed, stability, distribution).",
+            "Document parameter changes explicitly (no silent curve rewrites)."
+          ],
+          "acceptance_criteria": [
+            "Top/bottom feel 'basically right' with fewer comparisons (without increasing star jitter).",
+            "Session speed targets remain met after tuning."
+          ]
+        }
+      ]
+    },
+    "phase_3": {
+      "name": "Discover (Books) — Preference Signals + Recommendations",
+      "goal": "Recommend books and surface preference signals using the user's own rankings, without diluting trust (no AI decides ratings; everything is explainable and evidence-backed).",
+      "entry_criteria": [
+        "Phase 2 mobile shell shipped (Discover tab exists as a stub).",
+        "Sufficient finished items + comparisons to support non-noisy signals (minimum thresholds defined).",
+        "Enough metadata coverage (length/subjects/language) to avoid making up stories."
+      ],
+      "epics": [
+        {
+          "id": "P3-E1",
+          "name": "Preference Signals (Explainable)",
+          "outcome": "Users can see what their library suggests they like (e.g., long books, fiction, translated) with clear evidence and confidence.",
+          "scope": [
+            "Derive signals from metadata (subjects, language/translation, length, genre proxies).",
+            "Only surface a signal when thresholds are met; show confidence and examples from the library.",
+            "Always phrase as relative preferences (\"you tend to prefer…\"), never objective truth."
+          ],
+          "acceptance_criteria": [
+            "Signals feel accurate to users and are easy to challenge/verify via comparisons.",
+            "No signal is shown without sufficient supporting examples."
+          ]
+        },
+        {
+          "id": "P3-E2",
+          "name": "Recommendations (Discover Feed)",
+          "outcome": "Discover recommends books with a clear 'why this' and an easy add-to-want action.",
+          "scope": [
+            "Candidate sourcing (catalog/search) and ranking using preference signals.",
+            "Explain each recommendation with 1–2 reasons tied to the user's library.",
+            "Controls: add to want, hide/not interested, and simple filters."
+          ],
+          "acceptance_criteria": [
+            "Users understand why a recommendation appeared in one glance.",
+            "Discover drives meaningful add-to-want actions without degrading trust in rankings."
+          ]
+        },
+        {
+          "id": "P3-E3",
+          "name": "Discover UX + Guardrails",
+          "outcome": "Discover feels helpful and safe, not manipulative.",
+          "scope": [
+            "Truth-first copy and disclaimers: recommendations are suggestions; rankings remain comparisons-first.",
+            "Empty and cold-start states that teach how to get better recs (finish + compare more).",
+            "Privacy posture: signals derived from local library; no public feed by default."
+          ],
+          "acceptance_criteria": [
+            "Discover has a clear next action even when empty.",
+            "Users do not interpret Discover as 'the app rated this for me'."
+          ]
+        }
+      ]
+    },
+    "phase_4": {
+      "name": "Cross-Domain Expansion + Similarity Models",
+      "goal": "Expand beyond books (films/restaurants) and explore cross-domain taste overlaps and similarity-driven recommendations.",
+      "entry_criteria": [
+        "Phase 1–3 loop validated (repeat usage + trust in scores + Discover usefulness).",
+        "Rating curve/hysteresis stabilized and versioned.",
+        "Sufficient data per user to form robust user vectors (or a strong cold-start strategy)."
+      ],
+      "epics": [
+        {
+          "id": "P4-E1",
           "name": "Shared Taste Taxonomy",
           "scope": [
             "Define a strict, shared vibe taxonomy (energy, tone, novelty, texture, pace, social mode).",
@@ -167,7 +321,7 @@
           ]
         },
         {
-          "id": "P2-E2",
+          "id": "P4-E2",
           "name": "User Vectors + Nearest Neighbors",
           "scope": [
             "Derive user vectors from ratings + tags across domains.",
@@ -176,7 +330,7 @@
           ]
         },
         {
-          "id": "P2-E3",
+          "id": "P4-E3",
           "name": "Tabular Predictive Models",
           "scope": [
             "Baselines: kNN, random forest/GBDT for like/dislike.",
