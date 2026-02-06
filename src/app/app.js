@@ -100,6 +100,127 @@ export async function startApp() {
       .catch(() => {});
   }
 
+  function normalizeForMatch(s) {
+    return String(s || "")
+      .toLowerCase()
+      .replace(/['’]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ");
+  }
+
+  function tokensForMatch(s) {
+    const t = normalizeForMatch(s);
+    if (!t) return [];
+    const stop = new Set(["the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "by"]);
+    return t
+      .split(" ")
+      .filter(Boolean)
+      .filter((x) => x.length >= 2 && !stop.has(x))
+      .slice(0, 16);
+  }
+
+  function overlapCount(a, b) {
+    if (!a?.length || !b?.length) return 0;
+    const set = new Set(a);
+    let n = 0;
+    for (const x of b) if (set.has(x)) n += 1;
+    return n;
+  }
+
+  function titleLooksLikeListingPenalty({ candidateTitle, authorTokensAcrossResults, candidateAuthorTokens }) {
+    const titleTokens = tokensForMatch(candidateTitle);
+    if (!titleTokens.length) return 0;
+    const pool = authorTokensAcrossResults instanceof Set ? authorTokensAcrossResults : new Set();
+    let hits = 0;
+    for (const t of titleTokens) if (pool.has(t) && !candidateAuthorTokens.includes(t)) hits += 1;
+    return hits >= 2 ? -80 : hits === 1 ? -20 : 0;
+  }
+
+  function scoreCandidateForQuery(r, { queryText, queryTitle = null, queryAuthor = null, authorTokensAcrossResults = null } = {}) {
+    const candTitle = String(r?.title || "");
+    const candAuthor = String(r?.author || "");
+    const candTitleNorm = normalizeForMatch(candTitle);
+    const candAuthorNorm = normalizeForMatch(candAuthor);
+    const candTitleTokens = tokensForMatch(candTitle);
+    const candAuthorTokens = tokensForMatch(candAuthor);
+
+    const qTitle = queryTitle != null ? String(queryTitle || "") : "";
+    const qAuthor = queryAuthor != null ? String(queryAuthor || "") : "";
+    const qText = String(queryText || "");
+
+    const qTitleNorm = qTitle ? normalizeForMatch(qTitle) : "";
+    const qAuthorNorm = qAuthor ? normalizeForMatch(qAuthor) : "";
+    const qTokens = tokensForMatch(qText);
+    const qTitleTokens = qTitle ? tokensForMatch(qTitle) : qTokens;
+    const qAuthorTokens = qAuthor ? tokensForMatch(qAuthor) : [];
+
+    let score = 0;
+
+    // Title matching.
+    if (qTitleNorm && candTitleNorm && qTitleNorm === candTitleNorm) score += 120;
+    const titleOverlap = overlapCount(qTitleTokens, candTitleTokens);
+    score += Math.min(60, titleOverlap * 12);
+
+    // Author matching when known.
+    if (qAuthorNorm) {
+      if (candAuthorNorm && candAuthorNorm === qAuthorNorm) score += 90;
+      const authorOverlap = overlapCount(qAuthorTokens, candAuthorTokens);
+      score += Math.min(60, authorOverlap * 20);
+
+      // Penalize "Title, Author" imposters where the author tokens appear in the title but author doesn't match.
+      const authorInTitle = overlapCount(qAuthorTokens, candTitleTokens);
+      if (authorInTitle >= 2 && candAuthorNorm && candAuthorNorm !== qAuthorNorm) score -= 90;
+    } else {
+      // If user typed an author into freeform query, favor results whose author matches query tokens.
+      const authorOverlap = overlapCount(qTokens, candAuthorTokens);
+      score += Math.min(40, authorOverlap * 10);
+    }
+
+    // Penalize titles that look like listings ("Title, Author") based on the returned author pool.
+    score += titleLooksLikeListingPenalty({
+      candidateTitle: candTitle,
+      authorTokensAcrossResults,
+      candidateAuthorTokens: candAuthorTokens
+    });
+
+    // Tie-breakers (low weight).
+    if (r?.isbn) score += 4;
+    if (r?.cover_url) score += 4;
+
+    return score;
+  }
+
+  function rerankOpenLibraryResults(results, { queryText, queryTitle = null, queryAuthor = null } = {}) {
+    const arr = Array.isArray(results) ? results.slice() : [];
+    const authorTokensAcrossResults = new Set();
+    for (const r of arr) for (const t of tokensForMatch(r?.author)) authorTokensAcrossResults.add(t);
+
+    const scored = arr.map((r, idx) => ({
+      r,
+      idx,
+      s: scoreCandidateForQuery(r, { queryText, queryTitle, queryAuthor, authorTokensAcrossResults })
+    }));
+    scored.sort((a, b) => (b.s - a.s) || (a.idx - b.idx));
+    return scored.map((x) => x.r);
+  }
+
+  function isConfidentBestMatch(results, { queryText, queryTitle = null, queryAuthor = null } = {}) {
+    const arr = Array.isArray(results) ? results : [];
+    if (!arr.length) return { ok: false };
+    const authorTokensAcrossResults = new Set();
+    for (const r of arr) for (const t of tokensForMatch(r?.author)) authorTokensAcrossResults.add(t);
+    const best = arr[0];
+    const second = arr[1] ?? null;
+    const bestScore = scoreCandidateForQuery(best, { queryText, queryTitle, queryAuthor, authorTokensAcrossResults });
+    const secondScore = second
+      ? scoreCandidateForQuery(second, { queryText, queryTitle, queryAuthor, authorTokensAcrossResults })
+      : -Infinity;
+    // Heuristic thresholds: strong enough to avoid "close semantic match" applying.
+    const ok = bestScore >= 140 && bestScore - secondScore >= 25;
+    return { ok, bestScore, secondScore };
+  }
+
   function setToast(msg, { hint = null, ms = 2500 } = {}) {
     const id = crypto.randomUUID();
     state.toast = { id, msg, hint };
@@ -425,25 +546,45 @@ export async function startApp() {
     render();
 
     try {
-      const q = [item.title, item.author].filter(Boolean).join(" ");
+      const qTitle = String(item.title || "").trim();
+      const qAuthor = String(item.author || "").trim();
+      const qLoose = [qTitle, qAuthor].filter(Boolean).join(" ");
+      const qStrict =
+        qTitle && qAuthor
+          ? `title:"${qTitle.replaceAll('"', "")}" author:"${qAuthor.replaceAll('"', "")}"`
+          : qTitle
+            ? `title:"${qTitle.replaceAll('"', "")}"`
+            : qLoose;
       const language = state.searchLanguage || "en";
       let results = [];
       if (language && language !== "any" && language !== "en") {
-        results = await searchOpenLibrary(q, { limit: 5, language, requireLanguage: true, resolveEditions: true });
-        if (!results.length) results = await searchOpenLibrary(q, { limit: 5, language, requireLanguage: false, resolveEditions: true });
+        results = await searchOpenLibrary(qStrict, { limit: 8, language, requireLanguage: true, resolveEditions: true });
+        if (!results.length) results = await searchOpenLibrary(qLoose, { limit: 8, language, requireLanguage: true, resolveEditions: true });
+        if (!results.length) results = await searchOpenLibrary(qStrict, { limit: 8, language, requireLanguage: false, resolveEditions: true });
+        if (!results.length) results = await searchOpenLibrary(qLoose, { limit: 8, language, requireLanguage: false, resolveEditions: true });
       } else if (language && language !== "any") {
-        results = await searchOpenLibrary(q, { limit: 5, language, requireLanguage: false, resolveEditions: false });
+        results = await searchOpenLibrary(qStrict, { limit: 8, language, requireLanguage: false, resolveEditions: false });
+        if (!results.length) results = await searchOpenLibrary(qLoose, { limit: 8, language, requireLanguage: false, resolveEditions: false });
       } else {
-        results = await searchOpenLibrary(q, { limit: 5, language: "any", requireLanguage: false, resolveEditions: false });
+        results = await searchOpenLibrary(qStrict, { limit: 8, language: "any", requireLanguage: false, resolveEditions: false });
+        if (!results.length) results = await searchOpenLibrary(qLoose, { limit: 8, language: "any", requireLanguage: false, resolveEditions: false });
       }
       if (!results.length && language && language !== "any") {
-        results = await searchOpenLibrary(q, { limit: 5, language: "any", requireLanguage: false, resolveEditions: false });
+        results = await searchOpenLibrary(qLoose, { limit: 8, language: "any", requireLanguage: false, resolveEditions: false });
       }
+      results = rerankOpenLibraryResults(results, { queryText: qLoose, queryTitle: qTitle, queryAuthor: qAuthor });
+      const confidence = isConfidentBestMatch(results, { queryText: qLoose, queryTitle: qTitle, queryAuthor: qAuthor });
       const best = results[0] ?? null;
       if (!best) {
         state.detailOpenLibraryStatus = "idle";
         render();
         setToast("No Open Library match found.", { hint: "Try editing title/author, then retry." });
+        return;
+      }
+      if (!confidence.ok) {
+        state.detailOpenLibraryStatus = "idle";
+        render();
+        setToast("No confident Open Library match.", { hint: "Try a more exact title/author, or adjust language." });
         return;
       }
       state.detailOpenLibraryStatus = "preview";
@@ -582,6 +723,7 @@ export async function startApp() {
 	        results = await searchOpenLibrary(q, { limit: 10, language: "any", requireLanguage: false, resolveEditions: false });
 	      }
 	      if (reqId !== state.searchRequestId) return; // stale response
+        results = rerankOpenLibraryResults(results, { queryText: q });
 	      state.searchResults = results.map((r) => ({
 	        ...r,
 	        type_suggested: mapSubjectsToTypeSuggested(r.raw_subjects)
