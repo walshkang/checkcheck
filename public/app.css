@@ -384,6 +384,75 @@ button.chip:hover {
   justify-content: space-between;
 }
 
+.libraryGrid [data-section="discover"] {
+  display: none;
+}
+
+.tabBar {
+  display: none;
+}
+
+.tabBtn {
+  flex: 1;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 14px;
+  padding: 8px 6px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.tabBtn[aria-current="page"] {
+  color: var(--ink);
+  border-color: rgba(27, 111, 90, 0.35);
+  background: rgba(27, 111, 90, 0.08);
+  box-shadow: 0 0 0 3px rgba(27, 111, 90, 0.10);
+}
+
+.tabLabel {
+  text-align: center;
+  white-space: normal;
+}
+
+@media (max-width: 860px) {
+  .app[data-surface="library"] {
+    padding-bottom: 130px;
+  }
+
+  .tabBar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    gap: 8px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(247, 243, 234, 0.88);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+  }
+
+  .libraryGrid [data-section] {
+    display: none;
+  }
+
+  .libraryShell[data-library-tab="add"] .libraryGrid [data-section="add"] {
+    display: block;
+  }
+
+  .libraryShell[data-library-tab="discover"] .libraryGrid [data-section="discover"] {
+    display: block;
+  }
+
+  .libraryShell[data-library-tab="want"] .libraryGrid [data-section="shelf"],
+  .libraryShell[data-library-tab="ranking"] .libraryGrid [data-section="shelf"] {
+    display: block;
+  }
+}
+
 .link {
   border: none;
   background: transparent;

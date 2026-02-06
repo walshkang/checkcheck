@@ -67,11 +67,13 @@ export async function startApp() {
     currentPairShownAt: null,
 		    toast: null,
 
-	    showArchived: false,
-	    libraryView: "want", // want | unplaced | finished
+		    showArchived: false,
+		    libraryView: "want", // want | unplaced | finished
+        libraryTab: "add", // add | want | ranking | discover
+        libraryTabTouched: false,
 
-	    finishPromptItemId: null,
-	    finishPromptToken: null,
+		    finishPromptItemId: null,
+		    finishPromptToken: null,
 
     searchEnabled,
     searchLanguage: "en", // en | es | fr | de | it | pt | ja | ko | zh | any
@@ -90,10 +92,43 @@ export async function startApp() {
 	    importFlow: null, // { kind, provider, fileName, ... }
     postImportMicCheckPrompt: null, // { at: number }
 
-	    detailOpenLibraryStatus: "idle", // idle | loading | pick | preview
-	    detailOpenLibraryCandidate: null, // normalized OL result
-	    detailOpenLibraryCandidates: null // normalized OL results[]
-	  };
+		    detailOpenLibraryStatus: "idle", // idle | loading | pick | preview
+		    detailOpenLibraryCandidate: null, // normalized OL result
+		    detailOpenLibraryCandidates: null // normalized OL results[]
+		  };
+
+  function primeInitialLibraryTab() {
+    if (state.libraryTabTouched) return;
+
+    const finishedCount = state.finishedIds?.length ?? 0;
+    if (state.items.length === 0) {
+      state.libraryTab = "add";
+      return;
+    }
+    if (finishedCount > 0) {
+      state.libraryTab = "ranking";
+      if ((state.unplacedIds?.length ?? 0) > 0) state.libraryView = "unplaced";
+      else state.libraryView = "finished";
+      return;
+    }
+    state.libraryTab = "want";
+    state.libraryView = "want";
+  }
+
+  function setLibraryTab(tab, { touched = true, renderNow = true } = {}) {
+    if (tab !== "add" && tab !== "want" && tab !== "ranking" && tab !== "discover") return;
+    state.libraryTab = tab;
+    if (touched) state.libraryTabTouched = true;
+
+    if (tab === "want") state.libraryView = "want";
+    if (tab === "ranking") {
+      if (state.libraryView !== "unplaced" && state.libraryView !== "finished") {
+        state.libraryView = (state.unplacedIds?.length ?? 0) > 0 ? "unplaced" : "finished";
+      }
+    }
+
+    if (renderNow) render();
+  }
 
   function logEvent(type, data, { sessionId = null } = {}) {
     const sid = sessionId ?? state.session?.session_id ?? null;
@@ -416,20 +451,23 @@ export async function startApp() {
         state.currentPairShownAt = Date.now();
       }
     }
+    root.setAttribute("data-surface", state.surface);
     root.innerHTML = renderApp(state);
   }
 
-  async function load() {
-    const { items, libraryEntries, comparisons } = await idb.loadAll();
-    state.items = items;
-    state.itemsById = byId(items);
+	  async function load() {
+	    const { items, libraryEntries, comparisons } = await idb.loadAll();
+	    state.items = items;
+	    state.itemsById = byId(items);
     state.libraryEntries = libraryEntries;
     state.libraryByItemId = byId(libraryEntries);
-    state.comparisons = comparisons;
-    state.uiStarsDisplayById = await idb.getStarsDisplayState();
-    await recomputeAndPersist();
-    render();
-  }
+	    state.comparisons = comparisons;
+	    state.uiStarsDisplayById = await idb.getStarsDisplayState();
+	    await recomputeAndPersist();
+	    rebuildSelectors();
+	    primeInitialLibraryTab();
+	    render();
+	  }
 
   function normalizeTag(tag) {
     const v = String(tag || "").trim().replace(/\s+/g, " ");
@@ -689,14 +727,15 @@ export async function startApp() {
 	    state.libraryEntries.push(entry);
 	    state.libraryByItemId.set(item.id, entry);
 
-		    form.reset();
-		    if (intent === "finished") {
-		      state.libraryView = "unplaced";
-		      await handleSetStatus(item.id, "finished");
-		      return;
-		    }
-		    render();
-		  }
+			    form.reset();
+			    if (intent === "finished") {
+            setLibraryTab("ranking", { touched: false, renderNow: false });
+			      state.libraryView = "unplaced";
+			      await handleSetStatus(item.id, "finished");
+			      return;
+			    }
+			    render();
+			  }
 
   async function handleSearchOpenLibrary(form) {
     if (!state.searchEnabled) return;
@@ -843,11 +882,12 @@ export async function startApp() {
 	    render();
 	    setToast("Added.", { hint: "Ratings are relative to your library." });
 
-		    if (intent === "finished") {
-		      state.libraryView = "unplaced";
-		      await handleSetStatus(item.id, "finished");
-		    }
-		  }
+			    if (intent === "finished") {
+            setLibraryTab("ranking", { touched: false, renderNow: false });
+			      state.libraryView = "unplaced";
+			      await handleSetStatus(item.id, "finished");
+			    }
+			  }
 
   function cancelSearchEditionPreview() {
     state.searchEditionPreview = null;
@@ -984,14 +1024,20 @@ export async function startApp() {
 	    else state.libraryEntries.push(entry);
 
 		    const decidedComparisonsCount = state.comparisons.filter((c) => c.winner_item_id != null).length;
-		    if (entry.status === "finished" && !entry.archived_at && decidedComparisonsCount > 0) state.libraryView = "unplaced";
-		    if (entry.status === "want" || entry.status === "reading") state.libraryView = "want";
+		    if (entry.status === "finished" && !entry.archived_at && decidedComparisonsCount > 0) {
+		      state.libraryView = "unplaced";
+		      setLibraryTab("ranking", { renderNow: false });
+		    }
+		    if (entry.status === "want" || entry.status === "reading") {
+		      state.libraryView = "want";
+		      setLibraryTab("want", { renderNow: false });
+		    }
 
-	    // When the user marks an item finished, show a temporary inline prompt to do 3 comparisons.
-	    if (prev?.status !== "finished" && entry.status === "finished" && !entry.archived_at) {
-	      state.finishPromptItemId = itemId;
-	      const token = crypto.randomUUID();
-	      state.finishPromptToken = token;
+		    // When the user marks an item finished, show a temporary inline prompt to do 3 comparisons.
+		    if (prev?.status !== "finished" && entry.status === "finished" && !entry.archived_at) {
+		      state.finishPromptItemId = itemId;
+		      const token = crypto.randomUUID();
+		      state.finishPromptToken = token;
       setTimeout(() => {
         if (state.finishPromptToken === token && state.finishPromptItemId === itemId) {
           state.finishPromptItemId = null;
@@ -1424,18 +1470,27 @@ export async function startApp() {
       return;
     }
 
-	    if (action === "nav:library") return setSurface("library"), render();
-	    if (action === "export") return void handleExport().catch((e) => alert(String(e)));
-    if (action === "trace:export") return void handleExportTrace().catch((e) => alert(String(e)));
-    if (action === "trace:clear") return void handleClearTrace().catch((e) => alert(String(e)));
-
-		    if (action === "library:view") {
-		      const view = el.getAttribute("data-view");
-		      if (view !== "want" && view !== "unplaced" && view !== "finished") return;
-		      state.libraryView = view;
-		      render();
+		    if (action === "nav:library") return setSurface("library"), render();
+		    if (action === "tab:select") {
+		      const tab = el.getAttribute("data-tab");
+		      if (tab === "add" || tab === "want" || tab === "ranking" || tab === "discover") {
+		        setLibraryTab(tab);
+		      }
 		      return;
 		    }
+		    if (action === "export") return void handleExport().catch((e) => alert(String(e)));
+	    if (action === "trace:export") return void handleExportTrace().catch((e) => alert(String(e)));
+	    if (action === "trace:clear") return void handleClearTrace().catch((e) => alert(String(e)));
+
+			    if (action === "library:view") {
+			      const view = el.getAttribute("data-view");
+			      if (view !== "want" && view !== "unplaced" && view !== "finished") return;
+			      state.libraryView = view;
+			      if (view === "want") setLibraryTab("want", { touched: true, renderNow: false });
+			      else setLibraryTab("ranking", { touched: true, renderNow: false });
+			      render();
+			      return;
+			    }
 
 	    if (action === "import:open") {
 	      const input = document.createElement("input");

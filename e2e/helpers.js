@@ -17,7 +17,7 @@ export async function wipeAll(page) {
   await expect(page.locator(".toast .msg")).toHaveText(/Local data cleared\./);
   await expect(page.locator(".footer")).toContainText(/Finished:\s*0/);
   await expect(page.locator(".footer")).toContainText(/Comparisons:\s*0/);
-  await expect(page.getByText("Add your first book to begin.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Add books" })).toBeVisible();
 }
 
 export async function resetDisplay(page) {

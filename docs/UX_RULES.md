@@ -25,7 +25,7 @@ Phase 1 uses three primary surfaces:
 - **Only one primary surface open at a time**.
 - Compare takes full focus; Detail is a bottom sheet or full page; Library is the home surface.
 - Back behavior is predictable: returns to last task state (Compare Session → Library).
-- Phase 2+ direction (planned): use a bottom tab bar for Library flows (Add book / Want to read / My library ranking / Discover), but treat tabs as Library sub-views and hide the tab bar during Compare.
+- Phase 2: use a bottom tab bar for Library flows (Add book / Want to read / My library ranking / Discover), treat tabs as Library sub-views, and hide the tab bar during Compare.
 
 ## Interaction Principles
 - The next action is always obvious:

@@ -83,6 +83,7 @@ export function renderApp(state) {
     ${surface === "library" ? renderLibrary(state) : ""}
     ${surface === "compare" ? renderCompare(state) : ""}
     ${surface === "detail" ? renderDetail(state) : ""}
+    ${surface === "library" ? renderTabBar(state) : ""}
     ${renderFooter(state)}
   `;
 }
@@ -93,6 +94,31 @@ function renderToast(toast) {
       <div class="msg">${escapeHtml(toast.msg)}</div>
       ${toast.hint ? `<div class="hint">${escapeHtml(toast.hint)}</div>` : ""}
     </div>
+  `;
+}
+
+function renderTabBar(state) {
+  const tab = String(state.libraryTab || "want");
+  const items = [
+    { key: "add", label: "Add book" },
+    { key: "want", label: "Want to read" },
+    { key: "ranking", label: "My library ranking" },
+    { key: "discover", label: "Discover" }
+  ];
+
+  const buttons = items
+    .map((it) => {
+      const current = it.key === tab ? ' aria-current="page"' : "";
+      return `<button class="tabBtn" type="button" data-action="tab:select" data-tab="${escapeHtml(
+        it.key
+      )}"${current}><div class="tabLabel">${escapeHtml(it.label)}</div></button>`;
+    })
+    .join("");
+
+  return `
+    <nav class="tabBar" data-kind="tabbar" aria-label="Library tabs">
+      ${buttons}
+    </nav>
   `;
 }
 
@@ -185,6 +211,7 @@ function renderPostImportMicCheckPrompt(state) {
 }
 
 function renderLibrary(state) {
+  const libraryTab = String(state.libraryTab || "want");
   const empty = state.items.length === 0;
   const addLabel = empty ? "Add your first book" : "Add book";
   const searchPanel = renderSearchPanel(state);
@@ -363,58 +390,77 @@ function renderLibrary(state) {
     })
     .join("");
 
-		  return `
-			    <div class="grid">
-			      <div class="card">
-			        <h2>Add books</h2>
-			        ${
-			          empty
-			            ? `<div class="muted" style="margin-bottom:12px;">Mic check your taste. Add a few books you’ve read. Then we’ll do a quick mic check to rank them.</div>`
-			            : ""
-			        }
-			        ${searchPanel}
-			        ${manualSection}
+			  const discoverCard = `
+			    <div class="card" data-section="discover" data-kind="discover-stub">
+			      <h2>Discover</h2>
+			      <div class="muted">Coming soon: recommendations and preference signals, based on your own rankings.</div>
+			      <div style="height:12px;"></div>
+			      <div class="btns">
+			        <button class="btn primary" type="button" data-action="tab:select" data-tab="add">Add book</button>
+			        <button class="btn" type="button" data-action="tab:select" data-tab="ranking">My library ranking</button>
 			      </div>
-	      <div class="card">
-	        <div class="row" style="margin-bottom:10px;">
-	          <h2 style="margin:0;">Your shelf</h2>
-          ${
-            archivedCount > 0
-              ? `<button class="link" data-action="toggle:archived">${state.showArchived ? "Hide archived" : "Show archived"} (${archivedCount})</button>`
-	              : ""
-	          }
-	        </div>
-		        <div class="row" style="justify-content:flex-start; gap:8px; margin-bottom:12px;">
-		          <button class="pill" data-action="library:view" data-view="want"${state.libraryView === "want" ? ' aria-current="page"' : ""}>Want to read</button>
-		          <button class="pill" data-action="library:view" data-view="unplaced"${
-		            state.libraryView === "unplaced" ? ' aria-current="page"' : ""
-		          }>Unplaced${unplacedIds.length ? ` (${unplacedIds.length})` : ""}</button>
-		          <button class="pill" data-action="library:view" data-view="finished"${
-		            state.libraryView === "finished" ? ' aria-current="page"' : ""
-		          }>Finished</button>
-		        </div>
-		        ${importFlow}
-		        ${postImportPrompt}
-		        ${onboardingBanner}
-		        ${unplacedHeader}
-		        ${
-		          state.items.length === 0
-		            ? `<div class="muted">Add your first book to begin.</div>`
-		            : listRows.length === 0
-		              ? `<div class="muted">${
-		                  state.libraryView === "unplaced"
-		                    ? "No unplaced books right now."
-		                    : state.libraryView === "finished"
-		                      ? unplacedIds.length
-		                        ? `No rated books yet. Place books in Unplaced (${unplacedIds.length}).`
-		                        : "No finished books yet."
-		                      : "No want-to-read books yet."
-		                }</div>`
-		              : `<ul class="list">${listItems}</ul>`
-	        }
-	      </div>
-	    </div>
-	  `;
+			      <div style="height:10px;"></div>
+			      <div class="muted" style="font-size:12px;">Ratings stay comparisons-first. Discover only suggests what to read next.</div>
+			    </div>
+			  `;
+
+			  return `
+				    <div class="libraryShell" data-library-tab="${escapeHtml(libraryTab)}">
+				      ${importFlow}
+				      ${postImportPrompt}
+				      <div class="grid libraryGrid">
+				        <div class="card" data-section="add">
+				          <h2>Add books</h2>
+				          ${
+				            empty
+				              ? `<div class="muted" style="margin-bottom:12px;">Mic check your taste. Add a few books you’ve read. Then we’ll do a quick mic check to rank them.</div>`
+				              : ""
+				          }
+				          ${searchPanel}
+				          ${manualSection}
+				        </div>
+				        <div class="card" data-section="shelf">
+				          <div class="row" style="margin-bottom:10px;">
+				            <h2 style="margin:0;">Your shelf</h2>
+				          ${
+				            archivedCount > 0
+				              ? `<button class="link" data-action="toggle:archived">${state.showArchived ? "Hide archived" : "Show archived"} (${archivedCount})</button>`
+				              : ""
+				          }
+				          </div>
+				          <div class="row" style="justify-content:flex-start; gap:8px; margin-bottom:12px;">
+				            <button class="pill" data-action="library:view" data-view="want"${
+				              state.libraryView === "want" ? ' aria-current="page"' : ""
+				            }>Want to read</button>
+				            <button class="pill" data-action="library:view" data-view="unplaced"${
+				              state.libraryView === "unplaced" ? ' aria-current="page"' : ""
+				            }>Unplaced${unplacedIds.length ? ` (${unplacedIds.length})` : ""}</button>
+				            <button class="pill" data-action="library:view" data-view="finished"${
+				              state.libraryView === "finished" ? ' aria-current="page"' : ""
+				            }>Finished</button>
+				          </div>
+				          ${onboardingBanner}
+				          ${unplacedHeader}
+				          ${
+				            state.items.length === 0
+				              ? `<div class="muted">Add your first book to begin.</div>`
+				              : listRows.length === 0
+				                ? `<div class="muted">${
+				                    state.libraryView === "unplaced"
+				                      ? "No unplaced books right now."
+				                      : state.libraryView === "finished"
+				                        ? unplacedIds.length
+				                          ? `No rated books yet. Place books in Unplaced (${unplacedIds.length}).`
+				                          : "No finished books yet."
+				                        : "No want-to-read books yet."
+				                  }</div>`
+				                : `<ul class="list">${listItems}</ul>`
+				          }
+				        </div>
+				        ${discoverCard}
+				      </div>
+				    </div>
+				  `;
 }
 
 	function renderSearchPanel(state) {
