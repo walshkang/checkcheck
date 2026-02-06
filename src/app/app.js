@@ -3,9 +3,12 @@ import { recomputeDerived } from "../rating/recompute.js";
 import * as idb from "../storage/idb.js";
 import { pickPair } from "./pairs.js";
 import { renderApp } from "./render.js";
-import { resolveOpenLibraryEditionForWork, searchOpenLibrary } from "./catalog/openlibrary.js";
+import * as openlibrary from "./catalog/openlibrary.js";
 import { mapSubjectsToTypeSuggested } from "./catalog/type_mapping.js";
 import { parseImportFileText, normalizeTitleAuthorKeyForDedupe } from "./import/import_file.js";
+
+const searchOpenLibrary = openlibrary.searchOpenLibrary;
+const resolveOpenLibraryEditionForWork = openlibrary.resolveOpenLibraryEditionForWork ?? null;
 
 function byId(arr) {
   const m = new Map();
@@ -696,6 +699,10 @@ export async function startApp() {
   }
 
   async function handleSearchStartEditionPreview(resultIdx, existingItemId) {
+    if (typeof resolveOpenLibraryEditionForWork !== "function") {
+      setToast("Update edition requires refresh.", { hint: "Hard refresh the page and try again." });
+      return;
+    }
     const i = Number(resultIdx);
     if (!Number.isFinite(i) || i < 0) return;
     const r = state.searchResults[i];
